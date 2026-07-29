@@ -1,10 +1,10 @@
 ---
 change_id: postgres-schema-seed
 title: Postgres schema seed
-status: impl_reviewed
+status: archived
 created: 2026-07-29
 updated: 2026-07-29
-archived_at: null
+archived_at: 2026-07-29T14:31:47Z
 ---
 
 ## Notes

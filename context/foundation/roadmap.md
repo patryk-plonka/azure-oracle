@@ -48,7 +48,7 @@ provenance, served through a protected endpoint).
 | ID | Change ID | Outcome (user can …) | Prerequisites | PRD refs | Status |
 |---|---|---|---|---|---|
 | F-01 | deploy-skeleton-health | (foundation) deployable FastAPI app + `/health` + readiness + Railway config | — | FR-013, NFR (HTTPS) | done |
-| F-02 | postgres-schema-seed | (foundation) external Neon Postgres wired, limitations schema, curated CSV import (≥93 verified records) | — | FR-011, FR-012 | ready |
+| F-02 | postgres-schema-seed | (foundation) external Neon Postgres wired, limitations schema, curated CSV import (≥93 verified records) | — | FR-011, FR-012 | done |
 | F-03 | auth-scaffold-token-license | (foundation) GitHub OAuth + EULA + Demo license + token hashing + per-request token+license validation middleware | — | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006 | ready |
 | F-04 | observability-logging-floor | (foundation) request/error logging middleware with secrets stripped | — | NFR (minimal logging floor), FR-013 | ready |
 | S-01 | rest-search-query-core | user can query limitations via the REST search endpoint and receive source-backed records with a support-status verdict | F-01, F-02, F-03, F-04 | US-01, FR-008, FR-010, FR-016, FR-006 | proposed |
@@ -104,7 +104,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Unknowns:**
   - Is the curated CSV schema-aligned with the limitations + sources schema, or does it need a normalization step? — Owner: user. Block: no (resolvable during `/10x-plan`).
 - **Risk:** Sequenced as a parallel foundation because data is on the critical path of S-01 but has no dependency on auth or deploy skeleton. Risk: if the CSV is stale or schema-mismatched, S-01 returns thin results — mitigated by FR-011's "93 verified, source-backed records beat a larger unverified set" resolution and per-record verification metadata.
-- **Status:** ready
+- **Status:** done
 
 ### F-03: Auth scaffold + token/license validation middleware
 
@@ -205,3 +205,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 ## Done
 
 - **F-01: (foundation) a deployable FastAPI `app` object exists at `main:app`, `/health` and readiness endpoints respond, Railway config (start command, health-check host in allowed hosts) is in place — the smallest skeleton that can be deployed and verified.** — Archived 2026-07-29 → `context/archive/2026-07-20-deploy-skeleton-health/`. Lesson: —.
+- **F-02: (foundation) external Neon Postgres wired, limitations schema, curated CSV import (≥93 verified records) — the minimum data contract the query core can retrieve from.** — Archived 2026-07-29 → `context/archive/2026-07-29-postgres-schema-seed/`. Lesson: —.

@@ -31,5 +31,5 @@ def test_engine() -> Generator[Engine, None, None]:
 @pytest.fixture
 def clean_test_database(test_engine: Engine) -> Engine:
     with test_engine.begin() as connection:
-        connection.execute(text("TRUNCATE limitations, sources"))
+        connection.execute(text("TRUNCATE tokens, licenses, users, limitations, sources"))
     return test_engine

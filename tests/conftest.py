@@ -2,6 +2,13 @@ import os
 from collections.abc import Generator
 
 import pytest
+
+# Set auth env vars with test defaults BEFORE importing main (which gates on them at module level)
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-tests-only")
+os.environ.setdefault("APP_URL", "http://localhost")
+os.environ.setdefault("GITHUB_OAUTH_CLIENT_ID", "test-client-id")
+os.environ.setdefault("GITHUB_OAUTH_CLIENT_SECRET", "test-client-secret")
+
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import Engine, text

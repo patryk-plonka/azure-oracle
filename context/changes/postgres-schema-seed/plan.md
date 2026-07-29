@@ -296,40 +296,40 @@ migration. The CSV remains in version control as the re-seed artifact.
 
 #### Automated
 
-- [x] 1.1 Dependencies resolve and lockfile updates
-- [x] 1.2 Initial migration applies to the isolated database
-- [x] 1.3 ORM metadata and generated migration agree without pending schema changes
-- [x] 1.4 Lint and typecheck pass for database modules
+- [x] 1.1 Dependencies resolve and lockfile updates — b709ae4
+- [x] 1.2 Initial migration applies to the isolated database — b709ae4
+- [x] 1.3 ORM metadata and generated migration agree without pending schema changes — b709ae4
+- [x] 1.4 Lint and typecheck pass for database modules — b709ae4
 
 #### Manual
 
-- [x] 1.5 Isolated Neon/Postgres database provisioned and DATABASE_URL set outside source control
-- [x] 1.6 PRD, roadmap, and frame consistently state the >=93 v1 threshold
+- [x] 1.5 Isolated Neon/Postgres database provisioned and DATABASE_URL set outside source control — b709ae4
+- [x] 1.6 PRD, roadmap, and frame consistently state the >=93 v1 threshold — b709ae4
 
 ### Phase 2: Implement the Validated Idempotent Seed Import
 
 #### Automated
 
-- [ ] 2.1 Seed command imports the committed CSV into an empty isolated database
-- [ ] 2.2 Re-running the seed command leaves source and limitation counts unchanged
-- [ ] 2.3 Seed command rejects a malformed fixture without database changes
-- [ ] 2.4 Seed command rejects an input below 93 records before issuing writes
+- [x] 2.1 Seed command imports the committed CSV into an empty isolated database
+- [x] 2.2 Re-running the seed command leaves source and limitation counts unchanged
+- [x] 2.3 Seed command rejects a malformed fixture without database changes
+- [x] 2.4 Seed command rejects an input below 93 records before issuing writes
 
 #### Manual
 
-- [ ] 2.5 Documented migration and seed sequence succeeds against the intended Neon environment
-- [ ] 2.6 Seed output contains no connection string or credentials
+- [x] 2.5 Documented migration and seed sequence succeeds against the intended Neon environment
+- [x] 2.6 Seed output contains no connection string or credentials
 
 ### Phase 3: Prove Import Integrity and Document the Test Pattern
 
 #### Automated
 
-- [ ] 3.1 Database import tests pass against TEST_DATABASE_URL
-- [ ] 3.2 Full test suite passes
-- [ ] 3.3 Lint and typecheck pass
-- [ ] 3.4 Migration recreates an empty isolated test database that seeds successfully
+- [x] 3.1 Database import tests pass against TEST_DATABASE_URL
+- [x] 3.2 Full test suite passes
+- [x] 3.3 Lint and typecheck pass
+- [x] 3.4 Migration recreates an empty isolated test database that seeds successfully
 
 #### Manual
 
-- [ ] 3.5 Test database isolation from production has been verified
-- [ ] 3.6 Test-plan cookbook and README operator instructions have been reviewed
+- [x] 3.5 Test database isolation from production has been verified
+- [x] 3.6 Test-plan cookbook and README operator instructions have been reviewed

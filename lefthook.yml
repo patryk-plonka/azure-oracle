@@ -1,0 +1,9 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: lint
+      glob: "*.py"
+      run: uv run ruff check -- {staged_files}
+    - name: typecheck
+      glob: "*.py"
+      run: uv run mypy -- {staged_files}

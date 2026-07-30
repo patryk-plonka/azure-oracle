@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import RedirectResponse
 
+from auth import require_active_license
 from database import create_session_factory
 from models import License, Token, User
 
@@ -302,3 +303,9 @@ def auth_token_expire(
     db.commit()
 
     return {"expired": True}
+
+
+@app.get("/auth/probe")
+def auth_probe(user: User = Depends(require_active_license)):  # noqa: B008
+    """Minimal protected route — exercises both Depends() in chain."""
+    return {"authenticated": True, "user": user.login}

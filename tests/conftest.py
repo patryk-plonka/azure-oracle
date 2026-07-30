@@ -8,6 +8,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-tests-only")
 os.environ.setdefault("APP_URL", "http://localhost")
 os.environ.setdefault("GITHUB_OAUTH_CLIENT_ID", "test-client-id")
 os.environ.setdefault("GITHUB_OAUTH_CLIENT_SECRET", "test-client-secret")
+os.environ.setdefault("TOKEN_HASH_SALT", "test-token-hash-salt")
 
 from alembic import command
 from alembic.config import Config

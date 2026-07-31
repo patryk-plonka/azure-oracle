@@ -20,10 +20,10 @@ if _test_db_url:
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import Engine, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from auth import hash_token
-from database import create_database_engine, create_session_factory
+from database import create_database_engine
 from models import License, Token, User
 
 
@@ -61,7 +61,7 @@ RAW_TOKEN = "test-raw-token-32-bytes-long!!!"
 @pytest.fixture
 def auth_db_session(clean_test_database: Engine) -> Generator[Session, None, None]:
     """Per-test DB session with clean tables and seeded auth data."""
-    SessionLocal = create_session_factory(str(clean_test_database.url))
+    SessionLocal = sessionmaker(bind=clean_test_database, expire_on_commit=False)
     db = SessionLocal()
     try:
         yield db

@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import logging
 import os
 import secrets
 from collections.abc import Generator
@@ -8,13 +9,19 @@ from uuid import UUID
 
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
 from auth import require_active_license
 from database import create_session_factory
+from logging_middleware import (
+    RequestLoggingMiddleware,
+    SuppressUvicornTracebackFilter,
+)
 from models import License, Token, User
 
 # ------- Environment --------
@@ -48,6 +55,16 @@ _TOKEN_HASH_SALT: str = TOKEN_HASH_SALT  # type: ignore[assignment]
 # ------- App --------
 app = FastAPI()
 
+# Configure stdlib logging so middleware logs reach stdout.
+# Uvicorn configures its own loggers but our custom loggers need a handler.
+_stream_handler = logging.StreamHandler()
+_stream_handler.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
+for _name in ("azure_oracle.request", "azure_oracle.error"):
+    _logger = logging.getLogger(_name)
+    _logger.setLevel(logging.INFO)
+    _logger.addHandler(_stream_handler)
+    _logger.propagate = False
+
 # Configure allowed hosts from environment variable
 # Default includes localhost (dev) and Railway's healthcheck host
 # Additional hosts (e.g. custom domains) can be added via ALLOWED_HOSTS env var
@@ -55,6 +72,21 @@ allowed_hosts_str = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,healthcheck.
 allowed_hosts = [host.strip() for host in allowed_hosts_str.split(",")]
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
+# Logging middleware — added after TrustedHost so it runs outermost
+# and logs all requests including host-rejected 400s.
+app.add_middleware(RequestLoggingMiddleware)
+
+# Suppress uvicorn's redundant "Exception in ASGI application" traceback
+# so the middleware's scrubbed traceback is the sole error log.
+logging.getLogger("uvicorn.error").addFilter(SuppressUvicornTracebackFilter())
+
+# Custom 500 handler — returns a clean body with no secret leakage.
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 # ------- DB Session --------
 SessionFactory = create_session_factory()

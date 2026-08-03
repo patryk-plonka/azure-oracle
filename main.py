@@ -17,7 +17,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
-from auth import require_active_license
+from auth import hash_token, require_active_license
 from database import create_session_factory
 from logging_middleware import (
     RequestLoggingMiddleware,
@@ -53,7 +53,6 @@ _SECRET_KEY: str = SECRET_KEY  # type: ignore[assignment]
 _APP_URL: str = APP_URL  # type: ignore[assignment]
 _GITHUB_OAUTH_CLIENT_ID: str = GITHUB_OAUTH_CLIENT_ID  # type: ignore[assignment]
 _GITHUB_OAUTH_CLIENT_SECRET: str = GITHUB_OAUTH_CLIENT_SECRET  # type: ignore[assignment]
-_TOKEN_HASH_SALT: str = TOKEN_HASH_SALT  # type: ignore[assignment]
 
 # ------- App --------
 app = FastAPI()
@@ -130,6 +129,41 @@ def _verify_hmac_user_id(user_id: UUID, sig: str) -> bool:
     return hmac.compare_digest(expected, sig)
 
 
+TOKEN_GRANT_TTL = timedelta(minutes=5)
+
+
+def _create_token_grant(user_id: UUID, expires_at: datetime | None = None) -> str:
+    """Create a short-lived signed grant for one token-issuance request."""
+    expires_at = expires_at or datetime.now(UTC) + TOKEN_GRANT_TTL
+    payload = f"{user_id}.{int(expires_at.timestamp())}"
+    signature = hmac.new(
+        _SECRET_KEY.encode(), payload.encode(), hashlib.sha256
+    ).hexdigest()[:32]
+    return f"{payload}.{signature}"
+
+
+def _verify_token_grant(grant: str) -> UUID | None:
+    """Return the authorized user ID when a token grant is valid and unexpired."""
+    try:
+        user_id_value, expires_at_value, signature = grant.rsplit(".", 2)
+        user_id = UUID(user_id_value)
+        expires_at = int(expires_at_value)
+    except (TypeError, ValueError):
+        return None
+
+    payload = f"{user_id}.{expires_at}"
+    expected = hmac.new(
+        _SECRET_KEY.encode(), payload.encode(), hashlib.sha256
+    ).hexdigest()[:32]
+    if not hmac.compare_digest(expected, signature):
+        return None
+
+    if expires_at <= int(datetime.now(UTC).timestamp()):
+        return None
+
+    return user_id
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -151,7 +185,7 @@ def auth_login():
         "scope": OAUTH_SCOPE,
     }
     qs = "&".join(f"{k}={v}" for k, v in params.items())
-    return RedirectResponse(f"{GITHUB_AUTHORIZE_URL}?{qs}")
+    return RedirectResponse(f"{GITHUB_AUTHORIZE_URL}?{qs}", status_code=302)
 
 
 @app.get("/auth/callback")
@@ -229,37 +263,30 @@ def auth_callback(
 
     db.commit()
 
+    token_grant = _create_token_grant(user.id)
+
     return {
         "user_id": str(user.id),
         "login": user.login,
         "eula_accepted": user.eula_accepted_at is not None,
         "license": "demo",
+        "token_grant": token_grant,
     }
 
 
 TOKEN_TTL_DAYS = 90
 
 
-def _hash_token(raw: str) -> str:
-    """Hash a raw token with the salt for storage."""
-    return hashlib.sha256((raw + _TOKEN_HASH_SALT).encode()).hexdigest()
-
-
 @app.get("/auth/token")
 def auth_token(
-    user_id: str = Query(...),
-    sig: str = Query(...),
+    grant: str = Query(...),
     db: Session = Depends(get_db),  # noqa: B008
 ):
-    """Generate an API token for a user, gated on HMAC-signed user_id, EULA, and license."""
-    # 1. Verify HMAC signature
-    try:
-        uid = UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user_id format")
-
-    if not _verify_hmac_user_id(uid, sig):
-        raise HTTPException(status_code=400, detail="Invalid user_id signature")
+    """Generate an API token for a user with a short-lived OAuth token grant."""
+    # 1. Verify the callback-issued token grant
+    uid = _verify_token_grant(grant)
+    if uid is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired token grant")
 
     # 2. Find user
     user = db.scalar(select(User).where(User.id == uid))
@@ -282,7 +309,7 @@ def auth_token(
 
     # 5. Generate token (hash-only storage)
     raw = secrets.token_urlsafe(32)
-    token_hash = _hash_token(raw)
+    token_hash = hash_token(raw)
     now = datetime.now(UTC)
     expires_at = now + timedelta(days=TOKEN_TTL_DAYS)
 
@@ -325,7 +352,7 @@ def auth_token_expire(
     if not token_hash and not raw_token:
         raise HTTPException(status_code=400, detail="Provide 'token' or 'token_hash'")
     if raw_token:
-        token_hash = _hash_token(raw_token)
+        token_hash = hash_token(raw_token)
 
     # 3. Find token belonging to user
     token_row = db.scalar(

@@ -3,6 +3,7 @@ import hmac
 import logging
 import os
 import secrets
+import time
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -21,6 +22,8 @@ from database import create_session_factory
 from logging_middleware import (
     RequestLoggingMiddleware,
     SuppressUvicornTracebackFilter,
+    log_request,
+    log_unhandled_exception,
 )
 from models import License, Token, User
 
@@ -86,6 +89,10 @@ logging.getLogger("uvicorn.error").addFilter(SuppressUvicornTracebackFilter())
 async def unhandled_exception_handler(
     request: Request, exc: Exception
 ) -> JSONResponse:
+    start = request.scope.get("state", {}).get("request_start")
+    duration_ms = (time.perf_counter() - start) * 1000 if start else 0
+    log_request(request.method, request.url.path, 500, duration_ms)
+    log_unhandled_exception(exc)
     return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 # ------- DB Session --------

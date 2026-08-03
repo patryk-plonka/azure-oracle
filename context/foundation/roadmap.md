@@ -49,7 +49,7 @@ provenance, served through a protected endpoint).
 |---|---|---|---|---|---|
 | F-01 | deploy-skeleton-health | (foundation) deployable FastAPI app + `/health` + readiness + Railway config | — | FR-013, NFR (HTTPS) | done |
 | F-02 | postgres-schema-seed | (foundation) external Neon Postgres wired, limitations schema, curated CSV import (≥93 verified records) | — | FR-011, FR-012 | done |
-| F-03 | auth-scaffold-token-license | (foundation) GitHub OAuth + EULA + Demo license + token hashing + per-request token+license validation middleware | — | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006 | ready |
+| F-03 | auth-scaffold-token-license | (foundation) GitHub OAuth + EULA + Demo license + token hashing + per-request token+license validation middleware | — | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006 | done |
 | F-04 | observability-logging-floor | (foundation) request/error logging middleware with secrets stripped | — | NFR (minimal logging floor), FR-013 | done |
 | S-01 | rest-search-query-core | user can query limitations via the REST search endpoint and receive source-backed records with a support-status verdict | F-01, F-02, F-03, F-04 | US-01, FR-008, FR-010, FR-016, FR-006 | proposed |
 | S-02 | developer-onboarding-token | user can log in with GitHub, accept EULA, get Demo license, generate/expire a token | F-03 | US-02, FR-001, FR-002, FR-003, FR-004, FR-005 | proposed |
@@ -117,7 +117,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** This is the largest foundation because the PRD makes all of auth must-have and the Access Control section is non-trivial (multi-user, token hashing, per-request license validation). It is NOT "the auth layer complete" — S-02 still exercises OAuth + EULA + license + token issuance through a real user-visible onboarding flow, and FR-005b (revocation) is Parked. Risk: if per-request license validation is skipped or cached, the guardrail "No protected data without active Demo license" is violated — sequenced eagerly per the `quality` main_goal.
-- **Status:** ready
+- **Status:** done
 
 ### F-04: Observability floor + secrets-stripped logging
 
@@ -207,3 +207,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **F-01: (foundation) a deployable FastAPI `app` object exists at `main:app`, `/health` and readiness endpoints respond, Railway config (start command, health-check host in allowed hosts) is in place — the smallest skeleton that can be deployed and verified.** — Archived 2026-07-29 → `context/archive/2026-07-20-deploy-skeleton-health/`. Lesson: —.
 - **F-02: (foundation) external Neon Postgres wired, limitations schema, curated CSV import (≥93 verified records) — the minimum data contract the query core can retrieve from.** — Archived 2026-07-29 → `context/archive/2026-07-29-postgres-schema-seed/`. Lesson: —.
 - **F-04: (foundation) request + error logging middleware with secrets stripped from logs and error bodies — the minimal logging floor the PRD NFR requires.** — Archived 2026-08-03 → `context/archive/2026-08-02-observability-logging-floor/`. Lesson: —.
+- **F-03: (foundation) GitHub OAuth callback, EULA acceptance record, Demo license assignment, API token generation (stored hash-only), and per-request token-validity + Demo-license-state validation middleware — the smallest auth contract that lets a protected endpoint proceed.** — Archived 2026-08-03 → `context/archive/2026-07-29-auth-scaffold-token-license/`. Lesson: —.

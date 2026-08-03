@@ -3,7 +3,7 @@ project: "AzLimits"
 version: 1
 status: draft
 created: 2026-07-20
-updated: 2026-07-29
+updated: 2026-08-03
 prd_version: 1
 main_goal: quality
 top_blocker: time
@@ -50,7 +50,7 @@ provenance, served through a protected endpoint).
 | F-01 | deploy-skeleton-health | (foundation) deployable FastAPI app + `/health` + readiness + Railway config | — | FR-013, NFR (HTTPS) | done |
 | F-02 | postgres-schema-seed | (foundation) external Neon Postgres wired, limitations schema, curated CSV import (≥93 verified records) | — | FR-011, FR-012 | done |
 | F-03 | auth-scaffold-token-license | (foundation) GitHub OAuth + EULA + Demo license + token hashing + per-request token+license validation middleware | — | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006 | ready |
-| F-04 | observability-logging-floor | (foundation) request/error logging middleware with secrets stripped | — | NFR (minimal logging floor), FR-013 | ready |
+| F-04 | observability-logging-floor | (foundation) request/error logging middleware with secrets stripped | — | NFR (minimal logging floor), FR-013 | done |
 | S-01 | rest-search-query-core | user can query limitations via the REST search endpoint and receive source-backed records with a support-status verdict | F-01, F-02, F-03, F-04 | US-01, FR-008, FR-010, FR-016, FR-006 | proposed |
 | S-02 | developer-onboarding-token | user can log in with GitHub, accept EULA, get Demo license, generate/expire a token | F-03 | US-02, FR-001, FR-002, FR-003, FR-004, FR-005 | proposed |
 | S-03 | mcp-tool-wrapper | agent can query the same query core through an MCP tool | S-01 | US-01, FR-007 | proposed |
@@ -130,7 +130,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Sequenced eagerly (before S-01) per the `quality` main_goal — the "no secrets or tokens appear in any log" guardrail is a launch gate, not polish. Risk: if the stripping middleware is added after S-01 ships, a secret leak during the first end-to-end exercise is uncaught. Full structured/correlated logging (FR-014) is Parked, not deferred late.
-- **Status:** ready
+- **Status:** done
 
 ## Slices
 
@@ -206,3 +206,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 - **F-01: (foundation) a deployable FastAPI `app` object exists at `main:app`, `/health` and readiness endpoints respond, Railway config (start command, health-check host in allowed hosts) is in place — the smallest skeleton that can be deployed and verified.** — Archived 2026-07-29 → `context/archive/2026-07-20-deploy-skeleton-health/`. Lesson: —.
 - **F-02: (foundation) external Neon Postgres wired, limitations schema, curated CSV import (≥93 verified records) — the minimum data contract the query core can retrieve from.** — Archived 2026-07-29 → `context/archive/2026-07-29-postgres-schema-seed/`. Lesson: —.
+- **F-04: (foundation) request + error logging middleware with secrets stripped from logs and error bodies — the minimal logging floor the PRD NFR requires.** — Archived 2026-08-03 → `context/archive/2026-08-02-observability-logging-floor/`. Lesson: —.

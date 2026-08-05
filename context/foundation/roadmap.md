@@ -51,7 +51,7 @@ provenance, served through a protected endpoint).
 | F-02 | postgres-schema-seed | (foundation) external Neon Postgres wired, limitations schema, curated CSV import (≥93 verified records) | — | FR-011, FR-012 | done |
 | F-03 | auth-scaffold-token-license | (foundation) GitHub OAuth + EULA + Demo license + token hashing + per-request token+license validation middleware | — | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006 | done |
 | F-04 | observability-logging-floor | (foundation) request/error logging middleware with secrets stripped | — | NFR (minimal logging floor), FR-013 | done |
-| S-01 | rest-search-query-core | user can query limitations via the REST search endpoint and receive source-backed records with a support-status verdict | F-01, F-02, F-03, F-04 | US-01, FR-008, FR-010, FR-016, FR-006 | proposed |
+| S-01 | rest-search-query-core | user can query limitations via the REST search endpoint and receive source-backed records with a support-status verdict | F-01, F-02, F-03, F-04 | US-01, FR-008, FR-010, FR-016, FR-006 | done |
 | S-02 | developer-onboarding-token | user can log in with GitHub, accept EULA, get Demo license, generate/expire a token | F-03 | US-02, FR-001, FR-002, FR-003, FR-004, FR-005 | proposed |
 | S-03 | mcp-tool-wrapper | agent can query the same query core through an MCP tool | S-01 | US-01, FR-007 | proposed |
 
@@ -145,7 +145,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Unknowns:**
   - Does the query core need a relevance-matching algorithm beyond exact service/category match for v1, or is exact-match + support-status classification sufficient? — Owner: user. Block: no (resolvable during `/10x-plan`; PRD §Business Logic says "retrieval + relevance-matching + support-status classification" but does not specify the matching algorithm).
 - **Risk:** This is the north star — the validation milestone (the smallest end-to-end slice whose successful delivery proves the core product hypothesis). Risk: if the query core returns records without provenance or serves unverified records, the PRD §Guardrails ("No public result is ever returned without source provenance") is violated — mitigated by F-02 (import-time verification) and F-04 (logging evidence).
-- **Status:** proposed
+- **Status:** done
 
 ### S-02: Developer onboards and generates a token
 
@@ -188,7 +188,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 1. **Non-GitHub identity** — GitHub OAuth is the only v1 identity path (FR-001). Whether/when to add other IdPs is deferred. Owner: user. Block: no.
 2. **"Approved / verified" review workflow** — FR-012 serves only verified records, but v1 has no review UI; the curated import marks records verified at import time. How records get re-verified or re-approved after v2 live ingestion is unresolved. Owner: user. Block: no (v1 uses import-time verification).
 3. **Region/SKU precision (FR-009)** — demoted to nice-to-have but is the highest-value v1.1 upgrade, since "supported in region Y with SKU Z" is the sharpest form of the core question. Owner: user. Block: no.
-4. **Query-core relevance matching** — PRD §Business Logic says "retrieval + relevance-matching + support-status classification" but does not specify the matching algorithm. Does v1 need relevance beyond exact service/category match? Owner: user. Block: no (resolvable during `/10x-plan rest-search-query-core`).
+4. **Query-core relevance matching** — **Resolved for v1:** a hand-maintained curated alias map resolves known service shorthand, with a case-insensitive substring fallback across `service` and `feature`; no relevance scoring. This keeps matching explainable and sufficient for the 93-record corpus. Region and SKU remain accepted and echoed only, never applied as filters, because the available corpus data is too sparse and free-form for reliable filtering (FR-009 remains parked).
 
 ## Parked
 
@@ -204,6 +204,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 ## Done
 
+- **S-01: user can query limitations via the REST search endpoint and receive source-backed records with a support-status verdict.** — Completed 2026-08-05 → `context/changes/rest-search-query-core/`.
 - **F-01: (foundation) a deployable FastAPI `app` object exists at `main:app`, `/health` and readiness endpoints respond, Railway config (start command, health-check host in allowed hosts) is in place — the smallest skeleton that can be deployed and verified.** — Archived 2026-07-29 → `context/archive/2026-07-20-deploy-skeleton-health/`. Lesson: —.
 - **F-02: (foundation) external Neon Postgres wired, limitations schema, curated CSV import (≥93 verified records) — the minimum data contract the query core can retrieve from.** — Archived 2026-07-29 → `context/archive/2026-07-29-postgres-schema-seed/`. Lesson: —.
 - **F-04: (foundation) request + error logging middleware with secrets stripped from logs and error bodies — the minimal logging floor the PRD NFR requires.** — Archived 2026-08-03 → `context/archive/2026-08-02-observability-logging-floor/`. Lesson: —.

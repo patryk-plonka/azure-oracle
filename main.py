@@ -11,8 +11,8 @@ from uuid import UUID
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session, joinedload
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
@@ -25,7 +25,9 @@ from logging_middleware import (
     log_request,
     log_unhandled_exception,
 )
-from models import License, Token, User
+from models import License, Limitation, Token, User
+from query import aggregate_verdict, map_support_status, resolve_query
+from schemas import LimitationRecord, QueryContext, SearchResponse
 
 # ------- Environment --------
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -375,3 +377,55 @@ def auth_token_expire(
 def auth_probe(user: User = Depends(require_active_license)):  # noqa: B008
     """Minimal protected route — exercises both Depends() in chain."""
     return {"authenticated": True, "user": user.login}
+
+
+@app.get("/limitations/search", response_model=SearchResponse)
+def limitations_search(
+    q: str = Query(..., min_length=1),
+    region: str | None = Query(None),
+    sku: str | None = Query(None),
+    user: User = Depends(require_active_license),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> SearchResponse:
+    """Return verified limitations matching a curated service alias or substring."""
+    resolved_service = resolve_query(q)
+    statement = select(Limitation).options(joinedload(Limitation.source)).where(
+        Limitation.verification_state == "verified"
+    )
+    if resolved_service is not None:
+        statement = statement.where(Limitation.service == resolved_service)
+    else:
+        pattern = f"%{q}%"
+        statement = statement.where(
+            or_(Limitation.service.ilike(pattern), Limitation.feature.ilike(pattern))
+        )
+
+    rows = db.scalars(statement).all()
+    records = [
+        LimitationRecord(
+            id=row.id,
+            service=row.service,
+            feature=row.feature,
+            support_status=row.support_status,
+            limitation_type=row.limitation_type,
+            details=row.details,
+            workaround=row.workaround,
+            source_url=row.source.url,
+            source_title=row.source.title,
+            quote=row.quote,
+            confidence=row.confidence,
+            verification_state=row.verification_state,
+            verified_at=row.verified_at,
+            first_seen=row.first_seen,
+            last_seen=row.last_seen,
+        )
+        for row in rows
+    ]
+    return SearchResponse(
+        query=QueryContext(q=q, region=region, sku=sku),
+        support_status=aggregate_verdict(
+            map_support_status(row.support_status) for row in rows
+        ),
+        record_count=len(records),
+        records=records,
+    )

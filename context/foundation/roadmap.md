@@ -3,7 +3,7 @@ project: "AzLimits"
 version: 1
 status: draft
 created: 2026-07-20
-updated: 2026-08-03
+updated: 2026-08-06
 prd_version: 1
 main_goal: quality
 top_blocker: time
@@ -205,6 +205,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 ## Done
 
 - **S-01: user can query limitations via the REST search endpoint and receive source-backed records with a support-status verdict.** — Completed 2026-08-05 → `context/changes/rest-search-query-core/`.
+- **S-01: user can query limitations via the REST search endpoint and receive source-backed records with a support-status verdict.** — Archived 2026-08-06 → `context/archive/2026-08-03-rest-search-query-core/`. Lesson: —.
 - **F-01: (foundation) a deployable FastAPI `app` object exists at `main:app`, `/health` and readiness endpoints respond, Railway config (start command, health-check host in allowed hosts) is in place — the smallest skeleton that can be deployed and verified.** — Archived 2026-07-29 → `context/archive/2026-07-20-deploy-skeleton-health/`. Lesson: —.
 - **F-02: (foundation) external Neon Postgres wired, limitations schema, curated CSV import (≥93 verified records) — the minimum data contract the query core can retrieve from.** — Archived 2026-07-29 → `context/archive/2026-07-29-postgres-schema-seed/`. Lesson: —.
 - **F-04: (foundation) request + error logging middleware with secrets stripped from logs and error bodies — the minimal logging floor the PRD NFR requires.** — Archived 2026-08-03 → `context/archive/2026-08-02-observability-logging-floor/`. Lesson: —.

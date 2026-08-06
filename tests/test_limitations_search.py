@@ -39,7 +39,7 @@ def _add_limitation(
     return limitation
 
 
-def test_search_requires_a_token():
+def test_search_requires_a_token(clean_test_database):
     client = TestClient(app, base_url="http://localhost")
 
     response = client.get("/limitations/search", params={"q": "AKS"})

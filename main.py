@@ -381,9 +381,9 @@ def auth_probe(user: User = Depends(require_active_license)):  # noqa: B008
 
 @app.get("/limitations/search", response_model=SearchResponse)
 def limitations_search(
-    q: str = Query(..., min_length=1),
-    region: str | None = Query(None),
-    sku: str | None = Query(None),
+    q: str = Query(..., min_length=1, max_length=200),
+    region: str | None = Query(None, max_length=200),
+    sku: str | None = Query(None, max_length=200),
     user: User = Depends(require_active_license),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> SearchResponse:
@@ -395,11 +395,19 @@ def limitations_search(
     if resolved_service is not None:
         statement = statement.where(Limitation.service == resolved_service)
     else:
-        pattern = f"%{q}%"
+        # Escape LIKE wildcards so q is matched as a literal substring.
+        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
         statement = statement.where(
-            or_(Limitation.service.ilike(pattern), Limitation.feature.ilike(pattern))
+            or_(
+                Limitation.service.ilike(pattern, escape="\\"),
+                Limitation.feature.ilike(pattern, escape="\\"),
+            )
         )
 
+    # Defensive cap: the corpus is ~93 rows today, but keep a hard ceiling so
+    # future ingestion growth cannot turn this endpoint into an unbounded scan.
+    statement = statement.order_by(Limitation.service, Limitation.id).limit(500)
     rows = db.scalars(statement).all()
     records = [
         LimitationRecord(

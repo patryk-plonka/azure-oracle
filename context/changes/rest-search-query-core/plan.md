@@ -474,13 +474,13 @@ revision is created.
 
 #### Automated
 
-- [x] 3.1 All risk-guardrail tests pass: `uv run pytest tests/test_limitations_search.py -v`
-- [x] 3.2 Full suite passes: `uv run pytest tests/ -v`
-- [x] 3.3 Linting passes: `uv run ruff check .`
-- [x] 3.4 Type checking passes: `uv run mypy .`
+- [x] 3.1 All risk-guardrail tests pass: `uv run pytest tests/test_limitations_search.py -v` — 2f7b94a
+- [x] 3.2 Full suite passes: `uv run pytest tests/ -v` — 2f7b94a
+- [x] 3.3 Linting passes: `uv run ruff check .` — 2f7b94a
+- [x] 3.4 Type checking passes: `uv run mypy .` — 2f7b94a
 
 #### Manual
 
-- [x] 3.5 Removing the verified filter makes the Risk #2 test fail
-- [x] 3.6 Deployed endpoint verified end-to-end against the live Neon dataset
-- [x] 3.7 test-plan §3 and roadmap S-01 statuses match what shipped
+- [x] 3.5 Removing the verified filter makes the Risk #2 test fail — 2f7b94a
+- [x] 3.6 Deployed endpoint verified end-to-end against the live Neon dataset — 2f7b94a
+- [x] 3.7 test-plan §3 and roadmap S-01 statuses match what shipped — 2f7b94a

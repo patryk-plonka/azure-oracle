@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auth import hash_token
 from database import create_database_engine
-from models import License, Token, User
+from models import AuthGrant, License, LifecycleEvent, Token, User
 
 
 def run_migrations(engine: Engine, revision: str) -> None:
@@ -49,7 +49,12 @@ def test_engine() -> Generator[Engine, None, None]:
 @pytest.fixture
 def clean_test_database(test_engine: Engine) -> Engine:
     with test_engine.begin() as connection:
-        connection.execute(text("TRUNCATE tokens, licenses, users, limitations, sources"))
+        connection.execute(
+            text(
+                "TRUNCATE auth_grants, lifecycle_events, tokens, licenses, users, "
+                "limitations, sources"
+            )
+        )
     return test_engine
 
 
@@ -77,6 +82,7 @@ def seeded_user(auth_db_session: Session) -> User:
         github_id=12345,
         login="testuser",
         eula_accepted_at=datetime.now(UTC),
+        eula_version="demo-v1",
     )
     auth_db_session.add(user)
     auth_db_session.flush()
@@ -125,6 +131,7 @@ def seeded_user_no_license(auth_db_session: Session) -> User:
         github_id=77777,
         login="nolicense",
         eula_accepted_at=datetime.now(UTC),
+        eula_version="demo-v1",
     )
     auth_db_session.add(user)
     auth_db_session.commit()
@@ -147,3 +154,32 @@ def seeded_user_inactive_license(auth_db_session: Session) -> User:
     auth_db_session.add(license_row)
     auth_db_session.commit()
     return user
+
+
+@pytest.fixture
+def seeded_onboarding_grant(auth_db_session: Session, seeded_user: User) -> AuthGrant:
+    """Seed an unconsumed, short-lived opaque onboarding credential hash."""
+    grant = AuthGrant(
+        id=uuid4(),
+        user_id=seeded_user.id,
+        credential_hash=hash_token("fixture-onboarding-grant"),
+        purpose="onboarding",
+        expires_at=datetime.now(UTC) + timedelta(minutes=5),
+    )
+    auth_db_session.add(grant)
+    auth_db_session.commit()
+    return grant
+
+
+@pytest.fixture
+def seeded_lifecycle_event(auth_db_session: Session, seeded_user: User) -> LifecycleEvent:
+    """Seed non-secret lifecycle evidence for the authenticated user."""
+    event = LifecycleEvent(
+        id=uuid4(),
+        user_id=seeded_user.id,
+        event_type="eula_accepted",
+        metadata_json='{"eula_version":"demo-v1"}',
+    )
+    auth_db_session.add(event)
+    auth_db_session.commit()
+    return event

@@ -71,12 +71,15 @@ class User(Base):
     github_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
     login: Mapped[str] = mapped_column(String(255), nullable=False)
     eula_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    eula_version: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     licenses: Mapped[list[License]] = relationship(back_populates="user")
     tokens: Mapped[list[Token]] = relationship(back_populates="user")
+    lifecycle_events: Mapped[list[LifecycleEvent]] = relationship(back_populates="user")
+    auth_grants: Mapped[list[AuthGrant]] = relationship(back_populates="user")
 
 
 class License(Base):
@@ -106,3 +109,44 @@ class Token(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     user: Mapped[User] = relationship(back_populates="tokens")
+
+
+class LifecycleEvent(Base):
+    __tablename__ = "lifecycle_events"
+    __table_args__ = (
+        CheckConstraint("btrim(event_type) <> ''", name="ck_lifecycle_events_type_not_blank"),
+        CheckConstraint(
+            "event_type IN ('eula_accepted', 'demo_license_assigned', 'token_created')",
+            name="ck_lifecycle_events_type_allowed",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    metadata_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="lifecycle_events")
+
+
+class AuthGrant(Base):
+    __tablename__ = "auth_grants"
+    __table_args__ = (
+        CheckConstraint("btrim(purpose) <> ''", name="ck_auth_grants_purpose_not_blank"),
+        CheckConstraint(
+            "purpose IN ('oauth_state', 'onboarding', 'token_issuance')",
+            name="ck_auth_grants_purpose_allowed",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    credential_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[User] = relationship(back_populates="auth_grants")

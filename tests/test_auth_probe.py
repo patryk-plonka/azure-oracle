@@ -50,6 +50,26 @@ def test_probe_inactive_license(auth_db_session: Session, seeded_user_inactive_l
     assert response.status_code == 403
 
 
+def test_probe_active_non_demo_license(
+    auth_db_session: Session, seeded_user_active_non_demo_license: User
+):
+    raw = "active-non-demo-license-token!!"
+    auth_db_session.add(
+        Token(
+            user_id=seeded_user_active_non_demo_license.id,
+            token_hash=hash_token(raw),
+            name="default",
+            expires_at=datetime.now(UTC) + timedelta(days=90),
+        )
+    )
+    auth_db_session.commit()
+
+    response = TestClient(app, base_url="http://localhost").get(
+        "/auth/probe", headers={"Authorization": f"Bearer {raw}"}
+    )
+    assert response.status_code == 403
+
+
 def test_probe_valid(auth_db_session: Session, seeded_user: User, seeded_token: tuple[str, Token]):
     raw, _ = seeded_token
     client = TestClient(app, base_url="http://localhost")

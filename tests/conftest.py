@@ -6,7 +6,6 @@ from uuid import uuid4
 import pytest
 
 # Set auth env vars with test defaults BEFORE importing main (which gates on them at module level)
-os.environ.setdefault("SECRET_KEY", "test-secret-key-for-tests-only")
 os.environ.setdefault("APP_URL", "http://localhost")
 os.environ.setdefault("GITHUB_OAUTH_CLIENT_ID", "test-client-id")
 os.environ.setdefault("GITHUB_OAUTH_CLIENT_SECRET", "test-client-secret")
@@ -152,6 +151,23 @@ def seeded_user_inactive_license(auth_db_session: Session) -> User:
 
     license_row = License(user_id=user.id, license_type="demo", is_active=False)
     auth_db_session.add(license_row)
+    auth_db_session.commit()
+    return user
+
+
+@pytest.fixture
+def seeded_user_active_non_demo_license(auth_db_session: Session) -> User:
+    """Seed a user whose active license is outside the Demo-only MVP policy."""
+    user = User(
+        id=uuid4(),
+        github_id=66666,
+        login="nondemo",
+        eula_accepted_at=datetime.now(UTC),
+        eula_version="demo-v1",
+    )
+    auth_db_session.add(user)
+    auth_db_session.flush()
+    auth_db_session.add(License(user_id=user.id, license_type="trial", is_active=True))
     auth_db_session.commit()
     return user
 

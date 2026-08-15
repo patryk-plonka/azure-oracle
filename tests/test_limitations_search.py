@@ -93,6 +93,28 @@ def test_search_rejects_an_inactive_license(
     assert response.status_code == 403
 
 
+def test_search_rejects_an_active_non_demo_license(
+    auth_db_session: Session, seeded_user_active_non_demo_license: User
+):
+    raw = "active-non-demo-search-token!!!"
+    auth_db_session.add(
+        Token(
+            user_id=seeded_user_active_non_demo_license.id,
+            token_hash=hash_token(raw),
+            name="default",
+            expires_at=datetime.now(UTC) + timedelta(days=90),
+        )
+    )
+    auth_db_session.commit()
+
+    response = TestClient(app, base_url="http://localhost").get(
+        "/limitations/search",
+        params={"q": "AKS"},
+        headers={"Authorization": f"Bearer {raw}"},
+    )
+    assert response.status_code == 403
+
+
 def test_search_returns_matched_records_and_echoes_query_context(
     auth_db_session: Session, seeded_token: tuple[str, Token]
 ):

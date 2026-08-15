@@ -370,35 +370,35 @@ This MVP has low QPS and a small dataset. The added paths perform indexed lookup
 
 #### Automated
 
-- [x] 2.1 OAuth-state split migration upgrades, downgrades to `20260806_01`, and re-upgrades cleanly
-- [x] 2.2 OAuth state is hash-only, opaque, expiring, single-use, and rejects malformed/expired/replayed values
-- [x] 2.3 Mocked GitHub callback atomically creates one EULA-pending identity and owned onboarding grant, including concurrent identity/state cases
-- [x] 2.4 Callback/provider failures cannot create a token, Demo license, EULA state, lifecycle event, or partial state consumption
-- [x] 2.5 EULA delivery with Bearer onboarding credential and version-mismatch retry behavior pass
-- [x] 2.6 Explicit acceptance atomically assigns one Demo license, records transition lifecycle events, creates issuance state, and rejects replay/concurrent duplication
-- [x] 2.7 OAuth state, GitHub access token, and onboarding credential are absent from logs and error bodies
-- [x] 2.8 Onboarding migration, lint, and type checks pass: `uv run ruff check main.py models.py schemas.py migrations tests/test_auth_oauth.py tests/test_onboarding.py; uv run mypy main.py models.py schemas.py`
+- [x] 2.1 OAuth-state split migration upgrades, downgrades to `20260806_01`, and re-upgrades cleanly — d2cb2b5
+- [x] 2.2 OAuth state is hash-only, opaque, expiring, single-use, and rejects malformed/expired/replayed values — d2cb2b5
+- [x] 2.3 Mocked GitHub callback atomically creates one EULA-pending identity and owned onboarding grant, including concurrent identity/state cases — d2cb2b5
+- [x] 2.4 Callback/provider failures cannot create a token, Demo license, EULA state, lifecycle event, or partial state consumption — d2cb2b5
+- [x] 2.5 EULA delivery with Bearer onboarding credential and version-mismatch retry behavior pass — d2cb2b5
+- [x] 2.6 Explicit acceptance atomically assigns one Demo license, records transition lifecycle events, creates issuance state, and rejects replay/concurrent duplication — d2cb2b5
+- [x] 2.7 OAuth state, GitHub access token, and onboarding credential are absent from logs and error bodies — d2cb2b5
+- [x] 2.8 Onboarding migration, lint, and type checks pass: `uv run ruff check main.py models.py schemas.py migrations tests/test_auth_oauth.py tests/test_onboarding.py; uv run mypy main.py models.py schemas.py` — d2cb2b5
 
 #### Manual
 
-- [x] 2.9 Real GitHub login completes the explicit EULA acceptance sequence using Bearer onboarding state
-- [x] 2.10 Replayed callback/acceptance credentials cannot advance state or duplicate entitlement events; stale EULA version preserves retry ability
+- [x] 2.9 Real GitHub login completes the explicit EULA acceptance sequence using Bearer onboarding state — d2cb2b5
+- [x] 2.10 Replayed callback/acceptance credentials cannot advance state or duplicate entitlement events; stale EULA version preserves retry ability — d2cb2b5
 
 ### Phase 3: One-Time Token Issuance, Owner Expiration, and Demo Enforcement
 
 #### Automated
 
-- [ ] 3.1 One issuance credential creates one named hash-only token and returns raw token + opaque ID only once: `uv run pytest tests/test_auth_token.py tests/test_onboarding.py -v`
-- [ ] 3.2 Invalid, expired, wrong-purpose onboarding, and replayed issuance credentials are rejected: `uv run pytest tests/test_auth_token.py -v`
-- [ ] 3.3 Owner token expiration by target ID works, hides other-user tokens, and makes target token return 401: `uv run pytest tests/test_auth_token.py -v`
-- [ ] 3.4 Active non-Demo license rejection and active Demo access to probe/search pass: `uv run pytest tests/test_auth_dependencies.py tests/test_auth_probe.py tests/test_limitations_search.py -v`
-- [ ] 3.5 Removed HMAC contract and `SECRET_KEY` requirement have no remaining application/test/deployment dependency: `uv run pytest tests/test_auth_token.py -v; uv run ruff check main.py auth.py schemas.py tests`
-- [ ] 3.6 Token lifecycle type checks pass: `uv run mypy main.py auth.py schemas.py tests/test_auth_token.py tests/test_auth_dependencies.py`
+- [x] 3.1 One issuance credential creates one named hash-only token and returns raw token + opaque ID only once: `uv run pytest tests/test_auth_token.py tests/test_onboarding.py -v`
+- [x] 3.2 Invalid, expired, wrong-purpose onboarding, and replayed issuance credentials are rejected: `uv run pytest tests/test_auth_token.py -v`
+- [x] 3.3 Owner token expiration by target ID works, hides other-user tokens, and makes target token return 401: `uv run pytest tests/test_auth_token.py -v`
+- [x] 3.4 Active non-Demo license rejection and active Demo access to probe/search pass: `uv run pytest tests/test_auth_dependencies.py tests/test_auth_probe.py tests/test_limitations_search.py -v`
+- [x] 3.5 Removed HMAC contract and `SECRET_KEY` requirement have no remaining application/test/deployment dependency: `uv run pytest tests/test_auth_token.py -v; uv run ruff check main.py auth.py schemas.py tests`
+- [x] 3.6 Token lifecycle type checks pass: `uv run mypy main.py auth.py schemas.py tests/test_auth_token.py tests/test_auth_dependencies.py`
 
 #### Manual
 
-- [ ] 3.7 Two named tokens can be used independently and one can expire the other by ID
-- [ ] 3.8 A different user cannot discover or expire another user's token
+- [x] 3.7 Two named tokens can be used independently and one can expire the other by ID
+- [x] 3.8 A different user cannot discover or expire another user's token
 
 ### Phase 4: Documentation, Security Regression Coverage, and Release Verification
 

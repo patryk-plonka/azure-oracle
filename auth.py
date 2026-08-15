@@ -67,13 +67,14 @@ def require_active_license(
     user: User = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> User:
-    """Check user's license is_active → 403 if not."""
-    active_license = db.scalar(
+    """Require an active Demo license after token authentication."""
+    active_license = db.scalars(
         select(License).where(
             License.user_id == user.id,
-            License.is_active == True,
+            License.license_type == "demo",
+            License.is_active.is_(True),
         )
-    )
+    ).first()
     if active_license is None:
         raise HTTPException(status_code=403, detail="No active license")
 

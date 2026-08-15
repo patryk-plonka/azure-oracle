@@ -5,6 +5,7 @@ import time
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import UUID
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
@@ -26,7 +27,15 @@ from logging_middleware import (
     log_request,
     log_unhandled_exception,
 )
-from models import AuthGrant, License, LifecycleEvent, Limitation, OAuthState, User
+from models import (
+    AuthGrant,
+    License,
+    LifecycleEvent,
+    Limitation,
+    OAuthState,
+    Token,
+    User,
+)
 from query import aggregate_verdict, map_support_status, resolve_query
 from schemas import (
     EulaAcceptanceRequest,
@@ -37,6 +46,9 @@ from schemas import (
     OAuthCallbackResponse,
     QueryContext,
     SearchResponse,
+    TokenCreateRequest,
+    TokenCreateResponse,
+    TokenExpirationResponse,
 )
 
 APP_URL = os.getenv("APP_URL")
@@ -328,6 +340,96 @@ def accept_eula(
         issuance_credential=issuance_credential,
         issuance_expires_at=issuance_expires_at,
     )
+
+
+@app.post("/auth/tokens", response_model=TokenCreateResponse)
+def create_token(
+    payload: TokenCreateRequest,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),  # noqa: B008
+) -> TokenCreateResponse:
+    credential_hash = hash_token(_get_bearer_credential(authorization))
+    now = datetime.now(UTC)
+    grant = db.scalar(
+        select(AuthGrant).where(
+            AuthGrant.credential_hash == credential_hash,
+            AuthGrant.purpose == "token_issuance",
+            AuthGrant.consumed_at.is_(None),
+            AuthGrant.expires_at > now,
+        )
+    )
+    if grant is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired issuance credential")
+
+    raw_token = _new_credential()
+    expires_at = now + timedelta(days=90)
+    try:
+        claimed_grant = db.execute(
+            update(AuthGrant)
+            .where(
+                AuthGrant.id == grant.id,
+                AuthGrant.consumed_at.is_(None),
+                AuthGrant.expires_at > now,
+            )
+            .values(consumed_at=now)
+            .returning(AuthGrant.user_id)
+        ).scalar_one_or_none()
+        if claimed_grant is None:
+            db.rollback()
+            raise HTTPException(status_code=401, detail="Invalid or expired issuance credential")
+        active_demo_license = db.scalars(
+            select(License).where(
+                License.user_id == claimed_grant,
+                License.license_type == "demo",
+                License.is_active.is_(True),
+            )
+        ).first()
+        if active_demo_license is None:
+            db.rollback()
+            raise HTTPException(status_code=403, detail="No active Demo license")
+        token = Token(
+            user_id=claimed_grant,
+            token_hash=hash_token(raw_token),
+            name=payload.name,
+            expires_at=expires_at,
+        )
+        db.add(token)
+        db.flush()
+        db.add(
+            LifecycleEvent(
+                user_id=claimed_grant,
+                event_type="token_created",
+                metadata_json=f'{{"token_id":"{token.id}","name":"{token.name}"}}',
+            )
+        )
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Unable to create token") from None
+    return TokenCreateResponse(
+        token=raw_token,
+        token_id=str(token.id),
+        name=token.name,
+        expires_at=token.expires_at,
+    )
+
+
+@app.post("/auth/tokens/{token_id}/expire", response_model=TokenExpirationResponse)
+def expire_token(
+    token_id: str,
+    user: User = Depends(require_active_license),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> TokenExpirationResponse:
+    try:
+        parsed_token_id = UUID(token_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Token not found") from None
+    token = db.scalar(select(Token).where(Token.id == parsed_token_id, Token.user_id == user.id))
+    if token is None:
+        raise HTTPException(status_code=404, detail="Token not found")
+    token.expires_at = datetime.now(UTC)
+    db.commit()
+    return TokenExpirationResponse(expired=True, token_id=str(token.id), expires_at=token.expires_at)
 
 
 @app.get("/auth/probe")

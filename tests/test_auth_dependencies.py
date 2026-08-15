@@ -96,6 +96,13 @@ class TestRequireActiveLicense:
             require_active_license(user=seeded_user_no_license, db=auth_db_session)
         assert exc.value.status_code == 403
 
+    def test_active_non_demo_license(
+        self, auth_db_session: Session, seeded_user_active_non_demo_license: User
+    ):
+        with pytest.raises(HTTPException) as exc:
+            require_active_license(user=seeded_user_active_non_demo_license, db=auth_db_session)
+        assert exc.value.status_code == 403
+
     def test_license_deactivated_between_requests(
         self, auth_db_session: Session, seeded_user: User
     ):

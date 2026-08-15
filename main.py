@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import secrets
@@ -399,7 +400,7 @@ def create_token(
             LifecycleEvent(
                 user_id=claimed_grant,
                 event_type="token_created",
-                metadata_json=f'{{"token_id":"{token.id}","name":"{token.name}"}}',
+                metadata_json=json.dumps({"token_id": str(token.id), "name": token.name}),
             )
         )
         db.commit()

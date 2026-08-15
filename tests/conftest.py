@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auth import hash_token
 from database import create_database_engine
-from models import AuthGrant, License, LifecycleEvent, Token, User
+from models import AuthGrant, License, LifecycleEvent, OAuthState, Token, User
 
 
 def run_migrations(engine: Engine, revision: str) -> None:
@@ -51,7 +51,7 @@ def clean_test_database(test_engine: Engine) -> Engine:
     with test_engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE auth_grants, lifecycle_events, tokens, licenses, users, "
+                "TRUNCATE oauth_states, auth_grants, lifecycle_events, tokens, licenses, users, "
                 "limitations, sources"
             )
         )
@@ -169,6 +169,19 @@ def seeded_onboarding_grant(auth_db_session: Session, seeded_user: User) -> Auth
     auth_db_session.add(grant)
     auth_db_session.commit()
     return grant
+
+
+@pytest.fixture
+def seeded_oauth_state(auth_db_session: Session) -> OAuthState:
+    """Seed a valid pre-identity OAuth state without a user relationship."""
+    state = OAuthState(
+        id=uuid4(),
+        state_hash=hash_token("fixture-oauth-state"),
+        expires_at=datetime.now(UTC) + timedelta(minutes=5),
+    )
+    auth_db_session.add(state)
+    auth_db_session.commit()
+    return state
 
 
 @pytest.fixture

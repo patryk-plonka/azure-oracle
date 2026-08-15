@@ -137,7 +137,7 @@ class AuthGrant(Base):
     __table_args__ = (
         CheckConstraint("btrim(purpose) <> ''", name="ck_auth_grants_purpose_not_blank"),
         CheckConstraint(
-            "purpose IN ('oauth_state', 'onboarding', 'token_issuance')",
+            "purpose IN ('onboarding', 'token_issuance')",
             name="ck_auth_grants_purpose_allowed",
         ),
     )
@@ -150,3 +150,15 @@ class AuthGrant(Base):
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(back_populates="auth_grants")
+
+
+class OAuthState(Base):
+    __tablename__ = "oauth_states"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    state_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

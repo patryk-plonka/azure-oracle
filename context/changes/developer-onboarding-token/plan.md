@@ -4,7 +4,7 @@
 
 Turn the completed auth scaffold into a self-service, API-first onboarding journey. A developer authenticates with GitHub, explicitly reads and accepts versioned Demo terms, receives an active Demo license, creates one named API token that is shown only in its creation response, and can expire any of their tokens by opaque ID.
 
-The implementation replaces scaffold-only handoffs that are not user-completable—automatic consent/license assignment, replayable signed OAuth state and issuance grants, and server-secret HMAC token expiration—with expiring, single-use database-backed lifecycle state. It preserves hash-only token storage, explicit `Depends()` authorization, and secret-safe logging.
+The implementation replaces scaffold-only handoffs that are not user-completable—automatic consent/license assignment, replayable signed OAuth state and issuance grants, and server-secret HMAC token expiration—with expiring, single-use database-backed lifecycle state. OAuth callback state is isolated in a pre-identity `OAuthState` record; user-owned `AuthGrant` records are reserved for onboarding and issuance. It preserves hash-only token storage, explicit `Depends()` authorization, and secret-safe logging.
 
 ## Current State Analysis
 
@@ -15,7 +15,7 @@ The repository has F-03's backend auth foundation and S-01's protected REST sear
 - `main.py:193-275` verifies a timeless signed OAuth `state`, upserts a user while silently accepting the EULA, creates a Demo license, and returns an issuance grant.
 - `main.py:282-373` passes the grant through a query parameter and exposes expiration through an unreachable server-secret HMAC contract.
 - `auth.py:36-80` already centralizes valid-token and per-request active-license checks as two chained FastAPI dependencies; this must remain the protected-data boundary.
-- `models.py:66-112` and migration `20260729_02` contain user, license, and token state but no consent version, lifecycle-event history, or one-time ephemeral credentials.
+- `models.py:66-152` and migration `20260806_01` now contain consent, lifecycle-event, and owned-grant state; its original `oauth_state` grant purpose conflicts with the required non-null owner before GitHub identifies a user, so Phase 2 must correct it through a forward migration.
 - `logging_middleware.py:43-91` records only method/path/status and never request or response contents, providing the required no-secret logging pattern.
 - `context/foundation/test-plan.md` §6.4 calls for deterministic unit/integration auth tests, explicitly excludes GitHub-provider testing, and requires raw tokens to be absent from normal and error logs.
 - `context/deployment/deploy-plan.md:67-76` omits runtime-required `SECRET_KEY` and `APP_URL`; `README.md` has no OAuth/onboarding/token operating guide.
@@ -44,13 +44,13 @@ OAuth state, onboarding credentials, and issuance credentials are bounded by a s
 
 ## Implementation Approach
 
-Keep the API-first architecture and root-level module convention. Add typed request/response schemas for public onboarding contracts and database-backed, short-lived records for OAuth state and scoped onboarding/issuance credentials. Store only opaque random values as hashes, along with owner, purpose, expiry, and consumed timestamp, so the service can validate and atomically consume bearer handoffs without persisting reusable plaintext credentials.
+Keep the API-first architecture and root-level module convention. Add typed request/response schemas for public onboarding contracts and database-backed, short-lived records for OAuth state and scoped onboarding/issuance credentials. `OAuthState` is deliberately ownerless before identity verification; `AuthGrant` remains user-owned and has only `onboarding` and `token_issuance` purposes. Store only opaque random values as hashes, with expiry and consumed timestamps, so the service can validate and atomically consume bearer handoffs without persisting reusable plaintext credentials.
 
 The OAuth callback is only an identity handoff: it verifies and consumes state, exchanges the code with GitHub, upserts the user, and produces onboarding state. EULA acceptance—not login—records consent and creates an active Demo license. Token issuance requires a consumed-on-success issuance credential. Token expiration uses `require_active_license`, looks up an owned token by ID, and moves only that token's expiry to now. Extend the existing `get_current_user` / `require_active_license` chain to make `license_type == "demo"` an explicit MVP invariant.
 
 ## Critical Implementation Details
 
-The callback, EULA acceptance, and token issuance transitions must consume their corresponding short-lived credential in the same database transaction as their state mutation. A replay must fail even if it occurs before the credential's TTL ends; never mark a credential consumed before the downstream state change can commit.
+OAuth state is claimed only after GitHub identity verification and in the same transaction as local user upsert and creation of an owned onboarding grant. EULA acceptance and token issuance likewise consume their owned grant in the same transaction as their state mutation. Use PostgreSQL conditional `UPDATE … RETURNING` claims so concurrent consumers have exactly one winner; never mark a credential consumed in a committed transaction before its downstream transition can commit.
 
 ## Phase 1: Persist Consent, Lifecycle, and One-Time Credentials
 
@@ -64,9 +64,9 @@ Extend the database model so the service can identify accepted Demo terms, retai
 
 **File**: `models.py`
 
-**Intent**: Preserve the existing `User`, `License`, and `Token` relationships while adding the minimum durable state needed for versioned consent, required lifecycle evidence, and replay-resistant transient credentials.
+**Intent**: Preserve the existing `User`, `License`, and `Token` relationships while adding the minimum durable state needed for versioned consent, required lifecycle evidence, and replay-resistant owned transient credentials.
 
-**Contract**: Add nullable `User.eula_version` paired with `eula_accepted_at`; add an append-only `LifecycleEvent` entity with UUID ID, user foreign key, constrained event type, non-secret metadata/version context, and server-created timestamp; add an `AuthGrant` entity with UUID ID, user foreign key, hashed opaque credential, purpose (`oauth_state`, `onboarding`, or `token_issuance`), expiry, and nullable consumed timestamp. Give lookup fields appropriate uniqueness/indexes and `back_populates` relationships. Do not add a raw-token or raw-grant column.
+**Contract**: Add nullable `User.eula_version` paired with `eula_accepted_at`; add an append-only `LifecycleEvent` entity with UUID ID, user foreign key, constrained event type, non-secret metadata/version context, and server-created timestamp; add an owned `AuthGrant` entity with UUID ID, user foreign key, hashed opaque credential, purpose, expiry, and nullable consumed timestamp. Do not add a raw-token or raw-grant column. Phase 2 corrects the initial over-broad purpose constraint by separating pre-identity OAuth state into its own table; Phase 1 completion remains historical and must not be rewritten.
 
 #### 2. Create the schema migration
 
@@ -106,11 +106,19 @@ Extend the database model so the service can identify accepted Demo terms, retai
 
 ### Overview
 
-Replace automatic consent with a secure, self-service OAuth-to-EULA progression. The API exposes versioned, repository-owned Demo terms, issues a one-time onboarding credential after GitHub identity verification, records explicit consent, assigns the Demo license, and emits the two required lifecycle events.
+Correct the Phase 1 ownership mismatch and replace automatic consent with a secure, self-service OAuth-to-EULA progression. The API stores pre-identity OAuth state separately, issues an owned onboarding credential after GitHub identity verification, exposes versioned repository-owned Demo terms, records explicit consent, assigns the Demo license, and emits the two required lifecycle events.
 
 ### Changes Required:
 
-#### 1. Author static Demo EULA content and version source
+#### 1. Separate pre-identity OAuth state from owned auth grants
+
+**Files**: `models.py`, `migrations/versions/20260807_01_split_oauth_state_from_auth_grants.py` (new), `tests/conftest.py`, `tests/test_auth_dependencies.py`
+
+**Intent**: Repair the applied Phase 1 schema without weakening the invariant that every onboarding or issuance credential belongs to a known user. OAuth state exists before GitHub identity is known and needs its own hash-only, one-time persistence boundary.
+
+**Contract**: Add an ownerless `OAuthState` entity/table containing UUID ID, unique hash-only state lookup value, indexed expiry, nullable consumption timestamp, and server-created timestamp. It has no `User` relationship, purpose field, raw state, token, entitlement, or lifecycle-event fields. Create a forward Alembic revision depending on `20260806_01`: create/index `oauth_states`, then replace `ck_auth_grants_purpose_allowed` so owned `AuthGrant` permits only `onboarding` and `token_issuance`; retain its required `user_id`, hash uniqueness, and existing indexes. Downgrade restores the three-purpose constraint before dropping `oauth_states`; outstanding OAuth starts are intentionally invalidated by rollback. Extend child-before-parent fixture cleanup and add OAuth-state factories for valid, expired, and consumed records without a user.
+
+#### 2. Author static Demo EULA content and version source
 
 **File**: `docs/eula-demo-v1.md` (new)
 
@@ -118,45 +126,55 @@ Replace automatic consent with a secure, self-service OAuth-to-EULA progression.
 
 **Contract**: Define concise Demo terms covering informational/source-backed Azure-limitation data, no completeness or fitness guarantee, Demo-only scope, acceptable use, no automatic remediation, and version/change notice. The terms are product copy for this MVP, not a claim of legal review. Expose a single stable version constant from application code rather than deriving the version from mutable prose at runtime. Load the EULA content once at application startup and fail fast if the file is missing, rather than reading from disk per request; resolve the path relative to the application module, not the process working directory.
 
-#### 2. Add typed onboarding schemas
+#### 3. Add typed onboarding schemas and HTTP mocking dependency
 
-**File**: `schemas.py`
+**Files**: `schemas.py`, `pyproject.toml`, `uv.lock`
 
-**Intent**: Make FastAPI-generated OpenAPI documentation the supported developer interface for the JSON-only onboarding flow.
+**Intent**: Make FastAPI-generated OpenAPI documentation the supported developer interface for the JSON-only onboarding flow and enable deterministic HTTPX mocks for the GitHub boundary.
 
-**Contract**: Define models for OAuth callback/onboarding-next-step, EULA document metadata/content, EULA acceptance request and response, license summary, lifecycle-safe token creation request/response, and expiration response. Request payloads require the advertised EULA version and a bounded non-empty token name. Responses may expose user login, opaque token IDs, timestamps, license type/status, and short-lived credentials, but never token hashes, GitHub access tokens, or stored raw API tokens.
+**Contract**: Define models for OAuth callback/onboarding-next-step, EULA document metadata/content, EULA acceptance request and response, license summary, lifecycle-safe token creation request/response, and expiration response. The callback exposes `next_action`, user login, onboarding credential, and its expiry; EULA acceptance returns license summary plus issuance credential. EULA acceptance requires the advertised version; future token-name payloads are bounded and non-empty. Responses may expose user login, opaque token IDs, timestamps, license type/status, and short-lived credentials, but never token hashes, GitHub access tokens, OAuth-state hashes, or stored raw API tokens. Add only the pre-approved dev dependency `respx` and regenerate `uv.lock` using `uv` so Phase 2 mocks GitHub HTTP calls without contacting GitHub.
 
-#### 3. Replace OAuth state generation and callback behavior
+#### 4. Replace OAuth state generation and callback behavior
 
 **File**: `main.py`
 
-**Intent**: Move OAuth state from a timeless self-signed string to an opaque, stored, expiring, single-use credential and make callback completion create EULA-pending onboarding state rather than silently granting consent or a license.
+**Intent**: Move OAuth state from a timeless self-signed string to an opaque, separately persisted, expiring, single-use credential and make callback completion create EULA-pending onboarding state rather than silently granting consent or a license.
 
-**Contract**: `GET /auth/login` creates an opaque OAuth-state value, persists only its hash with purpose and short TTL, and redirects to GitHub with that value. `GET /auth/callback` verifies the unconsumed, unexpired state and consumes it transactionally after GitHub identity verification; it upserts the user login but does not set EULA fields or create a license. It returns a typed JSON response — replacing today's `token_grant` field — with: `next_action` (e.g., `"accept_eula"`), the single-use onboarding credential, its expiry timestamp, and the user's login. Onboarding and issuance credentials are returned only in typed JSON response bodies — never in redirect URLs, query strings, or headers — so they cannot leak into access logs or browser history. Invalid, expired, or replayed state always fails without creating/altering user entitlement state.
+**Contract**: `GET /auth/login` generates a random opaque value, persists only a domain-appropriate hash in `OAuthState` with short TTL, and redirects to GitHub with that raw state. `GET /auth/callback` validates state without consuming it before provider I/O, exchanges the code with explicit outbound timeouts, and maps GitHub transport/non-success/malformed-identity failures to `502` without local mutation. In one PostgreSQL transaction, conditionally claim the still-unconsumed, unexpired state with `UPDATE … WHERE … RETURNING`, upsert the GitHub user by unique `github_id`, create an owned `AuthGrant(purpose="onboarding")`, and commit them together. A failed conditional claim produces one generic `400` for malformed, expired, or replayed state. Callback completion does not set EULA fields or create a license. It returns a typed JSON response — replacing `token_grant` — with `next_action` (for example `"accept_eula"`), the raw one-time onboarding credential, its expiry timestamp, and user login. Onboarding and issuance credentials are returned only in typed JSON bodies and are supplied to later endpoints in `Authorization: Bearer <credential>` headers; never place them in redirects, query strings, or response headers.
 
-#### 4. Add EULA read and acceptance endpoints
+#### 5. Add EULA read and acceptance endpoints
 
 **File**: `main.py`
 
 **Intent**: Let the holder of onboarding state retrieve the static EULA and explicitly accept the exact current version before entitlement or token issuance is possible.
 
-**Contract**: Add a JSON endpoint returning versioned EULA metadata/content and an acceptance endpoint that receives the onboarding credential through the selected non-query API contract. Acceptance rejects a stale/mismatched EULA version and consumes the onboarding credential exactly once. In one transaction, it sets the user's EULA acceptance timestamp/version, ensures exactly one active `demo` license exists, appends `eula_accepted` and `demo_license_assigned` lifecycle events when those transitions occur, and returns a one-time token-issuance credential. Repeated acceptance with a new valid onboarding flow is idempotent for consent/license state and must not create duplicate active Demo licenses or duplicate transition events.
+**Contract**: Add `GET /auth/eula`, authenticated with a valid owned onboarding credential in the `Authorization` header, returning versioned EULA metadata/content without consuming its grant. Add `POST /auth/eula/accept`, using the same header and an acceptance body with the advertised EULA version. A version mismatch returns `409` and leaves the grant usable. Valid acceptance conditionally claims the owned onboarding grant and, in one transaction, updates the user's EULA version/timestamp only if needed, ensures exactly one active `demo` license exists, appends `eula_accepted` and `demo_license_assigned` events only for real transitions, and creates an owned one-time `token_issuance` `AuthGrant`. The active-license index remains the DB backstop; serialize per-user state evaluation so two valid onboarding grants cannot duplicate lifecycle transitions. Repeated acceptance with a new valid onboarding flow is idempotent for consent/license state and must not create duplicate active Demo licenses or duplicate transition events.
+
+#### 6. Protect OAuth and onboarding secrets in logs
+
+**Files**: `main.py`, `tests/test_logging_middleware.py`, `tests/test_auth_oauth.py`, `tests/test_onboarding.py`
+
+**Intent**: Close the immediate logging exposure created by OAuth's required callback query string before the new state machine is released.
+
+**Contract**: Suppress or sanitize Uvicorn access-log request lines so OAuth callback state is not emitted, while retaining existing method/path/status request logs. Assert OAuth state, GitHub access token, onboarding credential, and provider-response details remain absent from normal logs, exception logs, and error bodies. This does not replace the Phase 4 full-journey secret-regression suite.
 
 ### Success Criteria:
 
 #### Automated Verification:
 
-- OAuth login creates a redirect containing an opaque state; valid state is accepted once, while malformed, expired, and replayed state return a controlled client error: `uv run pytest tests/test_auth_oauth.py -v`
-- Mocked GitHub token/user HTTP responses (via the pre-approved dev-only HTTP mocking library) produce one EULA-pending local user and preserve identity on repeat login: `uv run pytest tests/test_auth_oauth.py -v`
-- OAuth callback alone cannot generate a token or create a Demo license: `uv run pytest tests/test_onboarding.py -v`
-- EULA read returns the repository-owned Demo terms and advertised version; acceptance rejects a version mismatch: `uv run pytest tests/test_onboarding.py -v`
-- Valid acceptance records version/timestamp, assigns one active Demo license, emits the required non-secret lifecycle events, and rejects credential replay: `uv run pytest tests/test_onboarding.py -v`
-- Static checks pass: `uv run ruff check main.py schemas.py tests/test_auth_oauth.py tests/test_onboarding.py; uv run mypy main.py schemas.py`
+- The forward migration creates `oauth_states`, restricts `AuthGrant` to owned onboarding/issuance purposes, and upgrades/downgrades around `20260806_01`: `uv run alembic upgrade head; uv run alembic downgrade 20260806_01; uv run alembic upgrade head`
+- OAuth login stores only a state hash in `oauth_states`; malformed, expired, replayed, and concurrent callback attempts yield one winner with no partial entitlement state: `uv run pytest tests/test_auth_oauth.py -v`
+- Mocked GitHub token/user HTTP responses create one EULA-pending local user and one owned onboarding grant, while concurrent distinct states for one GitHub identity preserve a single local user: `uv run pytest tests/test_auth_oauth.py -v`
+- OAuth callback alone cannot create a token, Demo license, EULA state, or lifecycle event; provider failures leave the state reusable until expiry: `uv run pytest tests/test_auth_oauth.py tests/test_onboarding.py -v`
+- EULA retrieval with a Bearer onboarding credential returns repository-owned terms without consuming its grant; acceptance rejects a version mismatch with `409` and preserves the grant: `uv run pytest tests/test_onboarding.py -v`
+- Valid and concurrent acceptance records exactly one Demo license and transition-event set, creates one issuance grant per consumed onboarding grant as appropriate, and rejects replay: `uv run pytest tests/test_onboarding.py -v`
+- OAuth state, GitHub access token, and onboarding credential stay absent from middleware/Uvicorn logs and error bodies: `uv run pytest tests/test_logging_middleware.py tests/test_auth_oauth.py tests/test_onboarding.py -v`
+- Static checks pass: `uv run ruff check main.py models.py schemas.py migrations tests/test_auth_oauth.py tests/test_onboarding.py; uv run mypy main.py models.py schemas.py`
 
 #### Manual Verification:
 
-- With a configured GitHub OAuth app, begin at `/auth/login`, approve GitHub access, inspect the typed callback response, retrieve the EULA in OpenAPI or an HTTP client, then submit its current version and confirm the next action is token issuance.
-- Repeat the same callback/acceptance request and confirm a stale or consumed credential cannot create another license/event or advance the flow.
+- With a configured GitHub OAuth app, begin at `/auth/login`, approve GitHub access, inspect the typed callback response, use its Bearer onboarding credential to retrieve the EULA in OpenAPI or an HTTP client, then submit its current version and confirm the next action is token issuance.
+- Repeat callback, acceptance, and stale-version requests; confirm consumed credentials cannot advance state, version mismatch allows a retry, and no duplicate license/event is created.
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for human confirmation that the live GitHub flow and explicit consent sequence were successful before proceeding.
 
@@ -176,7 +194,7 @@ Finish the self-service lifecycle by moving token issuance off query credentials
 
 **Intent**: Replace `GET /auth/token?grant=...` with a typed state-changing endpoint that consumes only a valid issuance credential generated after explicit EULA acceptance.
 
-**Contract**: Accept the issuance credential using the same safe non-query credential transport chosen for onboarding and a validated token-name payload. Verify purpose, user ownership, expiry, and unconsumed state; atomically consume it as token creation succeeds. Create a 90-day `Token` using `hash_token`, return the raw value only in the creation response alongside token ID/name/expiry, and append one `token_created` lifecycle event without storing raw token material. Expired, malformed, wrong-purpose, or replayed credentials cannot create a token.
+**Contract**: Accept the issuance credential in `Authorization: Bearer <credential>` with a validated token-name payload. Verify that it is an owned `AuthGrant` with purpose exactly `token_issuance`, valid expiry, and no consumption; atomically consume it as token creation succeeds. An `onboarding` grant is the wrong-purpose negative case; OAuth state cannot be presented here because it is persisted solely in `OAuthState`. Create a 90-day `Token` using `hash_token`, return the raw value only in the creation response alongside token ID/name/expiry, and append one `token_created` lifecycle event without storing raw token material. Expired, malformed, wrong-purpose, or replayed credentials cannot create a token.
 
 #### 2. Replace expiration with token-ID owner authorization
 
@@ -184,7 +202,7 @@ Finish the self-service lifecycle by moving token issuance off query credentials
 
 **Intent**: Remove the server-secret HMAC `user_id` query contract and let an authenticated, licensed developer expire an owned token without submitting a raw token or hash.
 
-**Contract**: Replace the existing expiration route with a typed `POST /auth/tokens/{token_id}/expire` protected by `require_active_license`. It finds only the target token belonging to the dependency's user, sets its expiry to the current UTC time, and returns the typed expired result. An unknown or another user's token ID produces a non-disclosing not-found response; repeated expiration is idempotent. Remove `_sign_user_id`, `_verify_hmac_user_id`, `_create_token_grant`, `TOKEN_GRANT_TTL`, and every public contract/test dependent on them; the callback's `token_grant` field was already replaced by the typed Phase 2 response.
+**Contract**: Replace the existing expiration route with a typed `POST /auth/tokens/{token_id}/expire` protected by `require_active_license`. It finds only the target token belonging to the dependency's user, sets its expiry to the current UTC time, and returns the typed expired result. An unknown or another user's token ID produces a non-disclosing not-found response; repeated expiration is idempotent. Remove `_sign_user_id`, `_verify_hmac_user_id`, `_create_token_grant`, `TOKEN_GRANT_TTL`, the `SECRET_KEY` startup requirement, and every public contract/test dependent on the old signed user-ID or issuance handoffs. The Phase 2 `OAuthState` table and its callback-consumption logic remain; only the legacy signed issuance grant is removed.
 
 #### 3. Enforce active Demo licensing at all protected boundaries
 
@@ -207,10 +225,10 @@ Finish the self-service lifecycle by moving token issuance off query credentials
 #### Automated Verification:
 
 - A consumed EULA acceptance produces one issuance credential that creates exactly one named hash-only token and returns raw token + opaque ID only in its creation response: `uv run pytest tests/test_auth_token.py tests/test_onboarding.py -v`
-- Malformed, expired, wrong-purpose, and replayed issuance credentials cannot create tokens: `uv run pytest tests/test_auth_token.py -v`
+- Malformed, expired, wrong-purpose onboarding, and replayed issuance credentials cannot create tokens: `uv run pytest tests/test_auth_token.py -v`
 - A valid owned Demo token expires an owned target token by ID; another user cannot; the target is rejected with 401 afterwards: `uv run pytest tests/test_auth_token.py -v`
 - Active non-Demo licenses are rejected with 403, while valid active Demo licenses continue to authorize `/auth/probe` and `/limitations/search`: `uv run pytest tests/test_auth_dependencies.py tests/test_auth_probe.py tests/test_limitations_search.py -v`
-- No remaining application route, schema, or test imports the removed user-ID HMAC helper: `uv run pytest tests/test_auth_token.py -v; uv run ruff check main.py auth.py schemas.py tests`
+- No remaining application route, schema, test, environment requirement, or deployment instruction imports the removed HMAC helpers or requires `SECRET_KEY`: `uv run pytest tests/test_auth_token.py -v; uv run ruff check main.py auth.py schemas.py tests`
 - Type checking passes: `uv run mypy main.py auth.py schemas.py tests/test_auth_token.py tests/test_auth_dependencies.py`
 
 #### Manual Verification:
@@ -244,7 +262,7 @@ Make the JSON onboarding flow self-service for developers, correct the deploymen
 
 **Intent**: Align the Railway service-variable table and setup steps with runtime startup requirements and the real OAuth callback contract.
 
-**Contract**: Add `SECRET_KEY` as a generated service secret used for credential hashing/signing and `APP_URL` as the canonical public application origin; retain the prohibition on committing/printing values. Update the variable-setting example and verification checklist without placing actual secret values in the document. Note in the rotation guidance that after this change `SECRET_KEY` no longer signs durable artifacts (grants/state are database rows), so rotating it does not invalidate issued tokens or pending onboarding flows.
+**Contract**: Add `APP_URL` as the canonical public application origin; retain the prohibition on committing/printing values for all remaining sensitive configuration, including OAuth client credentials and `TOKEN_HASH_SALT`. Remove `SECRET_KEY` from the service-variable table, setup instructions, and rotation guidance because no post-Phase-3 flow uses signing. Update examples and verification checklist without actual secret values. Document the distinct durable boundaries: callback state is stored in `OAuthState`; onboarding and issuance credentials are stored in owned `AuthGrant` rows.
 
 #### 3. Extend secret-safe logging and complete journey tests
 
@@ -252,15 +270,15 @@ Make the JSON onboarding flow self-service for developers, correct the deploymen
 
 **Intent**: Ensure all new bearer values and raw API tokens remain absent from logs/error responses — including uvicorn's access log, which records the full request line (query string included) and is the live leak channel for today's `?grant=`/`?sig=` endpoints — while mocked OAuth plus API endpoints prove the full supported journey.
 
-**Contract**: Configure uvicorn access logging so request lines with query strings are not emitted at default level (e.g., disable `uvicorn.access` or filter its records), alongside the existing `uvicorn.error` handling in `main.py`. Reuse the repository's direct non-propagating logger capture. Exercise successful onboarding/token issuance and failure paths containing raw token, OAuth state, onboarding credential, and issuance credential; assert none appear in captured logs or response error bodies. Add a test asserting that a request carrying a query-string credential produces no access-log record containing that value. Add an integration journey that mocks only GitHub HTTP exchanges and performs callback → EULA fetch → acceptance → token creation → authenticated search → owned expiration → rejected target token. Do not contact GitHub or add browser E2E.
+**Contract**: Retain and regression-test the Phase 2 Uvicorn access-log protection alongside the existing `uvicorn.error` handling in `main.py`. Reuse the repository's direct non-propagating logger capture. Exercise successful onboarding/token issuance and failure paths containing raw token, OAuth state, onboarding credential, and issuance credential; assert none appear in captured logs or response error bodies. Retain a test asserting that a request carrying callback query state produces no access-log record containing that value. Add an integration journey that mocks only GitHub HTTP exchanges and performs `OAuthState` callback → EULA fetch → acceptance → token creation → authenticated search → owned expiration → rejected target token. Do not contact GitHub or add browser E2E.
 
 #### 4. Update project verification instructions and lock state only if dependencies change
 
-**Files**: `README.md`, `pyproject.toml`, `uv.lock` (conditional)
+**Files**: `README.md`
 
 **Intent**: Keep documented commands aligned with the existing `uv`, pytest, Ruff, and mypy workflow while avoiding unnecessary dependency churn.
 
-**Contract**: No runtime package is required for this implementation. One dev-only test dependency is pre-approved: an HTTP mocking library for the GitHub token/user exchanges (e.g., `respx`); add it to the dev dependency group and update `uv.lock` via the normal `uv` workflow. No other dependency changes. The final documented verification commands are PowerShell-safe explicit paths or repository-wide commands, not shell globs that Windows PowerShell fails to expand.
+**Contract**: The Phase 2 `respx` dev dependency and lock update are already complete before this phase; no further dependency change is expected. Keep final documented verification commands PowerShell-safe with explicit paths or repository-wide commands, never shell globs that Windows PowerShell fails to expand.
 
 ### Success Criteria:
 
@@ -285,7 +303,7 @@ Make the JSON onboarding flow self-service for developers, correct the deploymen
 
 ### Unit Tests:
 
-- Opaque credential creation, hashing, purpose validation, TTL evaluation, and atomic single-use consumption.
+- Opaque OAuth-state and owned-grant creation, hashing, purpose validation, TTL evaluation, and atomic single-use consumption.
 - EULA version validation; idempotent license assignment; non-duplicating lifecycle event creation.
 - `get_current_user` 401 behavior and `require_active_license` 403 behavior for active Demo, inactive Demo, and active non-Demo licenses.
 - Token owner lookup/expiration and hash-only storage.
@@ -293,8 +311,8 @@ Make the JSON onboarding flow self-service for developers, correct the deploymen
 ### Integration Tests:
 
 - Mock GitHub token/user HTTP calls, not GitHub itself.
-- OAuth login/callback → EULA fetch → explicit acceptance → one-time token issuance → protected search → owned expiration → target rejection.
-- Invalid, expired, mismatched-purpose, and replayed state/grant paths.
+- OAuth login/callback through `OAuthState` → EULA fetch with an onboarding Bearer credential → explicit acceptance → owned issuance grant → one-time token issuance → protected search → owned expiration → target rejection.
+- Invalid, expired, mismatched-purpose, replayed, and concurrent OAuth-state/owned-grant paths; concurrent states for one GitHub identity preserve one local user.
 - Existing search endpoint remains protected and preserves its provenance contract.
 - Normal and error logging never exposes bearer credentials or raw API tokens, including the uvicorn access log (full request line with query string).
 
@@ -305,7 +323,7 @@ Make the JSON onboarding flow self-service for developers, correct the deploymen
 3. Retrieve and inspect the versioned Demo terms via the documented JSON endpoint; accept exactly that version and confirm one Demo license/event set exists.
 4. Create two named tokens, store each outside the terminal history, and use each against `GET /limitations/search` with a bearer header.
 5. Use one token to expire the other by opaque ID; verify the target gets 401 while the actor remains usable.
-6. Repeat a callback state, onboarding credential, and issuance credential; verify each is rejected after consumption.
+6. Repeat a callback state, onboarding credential, and issuance credential; verify each is rejected after consumption. Submit an outdated EULA version first and confirm the service returns `409` without consuming the onboarding credential.
 7. Review application logs and error bodies for the exercised flow; confirm no token, OAuth state, onboarding credential, or issuance credential appears.
 
 ## Performance Considerations
@@ -314,8 +332,9 @@ This MVP has low QPS and a small dataset. The added paths perform indexed lookup
 
 ## Migration Notes
 
-- The new migration must follow `20260729_02_create_users_licenses_tokens.py` and be tested from both an existing deployed auth schema and a fresh `base` database.
+- The completed lifecycle migration remains `20260806_01_create_onboarding_lifecycle_state.py`; the OAuth-state split is a new forward revision depending on it and must be tested from both that existing schema and a fresh `base` database.
 - Existing users created by F-03 have an acceptance timestamp but no EULA version. Treat them as EULA-pending for S-02: they must complete explicit acceptance of the current Demo terms before any new token issuance, while existing valid tokens continue to be governed by the explicit active-Demo check.
+- The OAuth-state split downgrade intentionally drops outstanding pre-identity `OAuthState` rows and restores the original `AuthGrant` purpose constraint. It is only for controlled local verification; production rollback remains forward-only.
 - The old `GET /auth/token` and HMAC-based expiration contract must be removed/replaced rather than retained as a compatibility bypass; this service has no published stable client surface yet.
 - Rollback of code cannot safely undo user consents, issued tokens, or lifecycle events. Database schema downgrade is only for controlled local verification; production remediation should be forward-only.
 
@@ -325,7 +344,8 @@ This MVP has low QPS and a small dataset. The added paths perform indexed lookup
 - Roadmap: `context/foundation/roadmap.md` — S-02 and its explicit onboarding/token outcome.
 - Test strategy: `context/foundation/test-plan.md` — Risk #3/#4 and §6.4 auth/licensing regression guidance.
 - Completed auth scaffold: `context/archive/2026-07-29-auth-scaffold-token-license/plan.md` and `reviews/impl-review.md`.
-- Current implementation: `main.py:119-373`, `auth.py:31-80`, `models.py:66-112`, `logging_middleware.py:43-91`.
+- Ownership-correction research: `context/changes/developer-onboarding-token/research.md`.
+- Current implementation: `main.py:119-373`, `auth.py:31-80`, `models.py:66-152`, `logging_middleware.py:43-91`.
 - Operations: `README.md`, `context/deployment/deploy-plan.md:67-76`.
 
 ## Progress
@@ -336,41 +356,43 @@ This MVP has low QPS and a small dataset. The added paths perform indexed lookup
 
 #### Automated
 
-- [x] 1.1 Fresh-database migration recreation and seed verification pass: `uv run pytest tests/test_seed_import.py -v`
-- [x] 1.2 New migration upgrades, downgrades to `20260729_02`, and re-upgrades cleanly
-- [x] 1.3 Auth fixture cleanup removes all new lifecycle state: `uv run pytest tests/test_auth_dependencies.py -v`
-- [x] 1.4 Persistence lint and type checks pass: `uv run ruff check models.py migrations tests/conftest.py; uv run mypy models.py tests/conftest.py`
+- [x] 1.1 Fresh-database migration recreation and seed verification pass: `uv run pytest tests/test_seed_import.py -v` — f551635
+- [x] 1.2 New migration upgrades, downgrades to `20260729_02`, and re-upgrades cleanly — f551635
+- [x] 1.3 Auth fixture cleanup removes all new lifecycle state: `uv run pytest tests/test_auth_dependencies.py -v` — f551635
+- [x] 1.4 Persistence lint and type checks pass: `uv run ruff check models.py migrations tests/conftest.py; uv run mypy models.py tests/conftest.py` — f551635
 
 #### Manual
 
-- [x] 1.5 Schema inspection confirms no raw token or raw grant persistence
-- [x] 1.6 Controlled downgrade/re-upgrade preserves pre-existing schema objects
+- [x] 1.5 Schema inspection confirms no raw token or raw grant persistence — f551635
+- [x] 1.6 Controlled downgrade/re-upgrade preserves pre-existing schema objects — f551635
 
 ### Phase 2: Explicit OAuth and EULA Onboarding State Machine
 
 #### Automated
 
-- [ ] 2.1 OAuth state is opaque, expiring, single-use, and rejects malformed/expired/replayed values: `uv run pytest tests/test_auth_oauth.py -v`
-- [ ] 2.2 Mocked GitHub callback upserts an EULA-pending identity: `uv run pytest tests/test_auth_oauth.py -v`
-- [ ] 2.3 Callback alone cannot create a token or Demo license: `uv run pytest tests/test_onboarding.py -v`
-- [ ] 2.4 EULA delivery/version mismatch validation passes: `uv run pytest tests/test_onboarding.py -v`
-- [ ] 2.5 Explicit acceptance assigns one Demo license, records lifecycle events, and rejects replay: `uv run pytest tests/test_onboarding.py -v`
-- [ ] 2.6 Onboarding lint and type checks pass: `uv run ruff check main.py schemas.py tests/test_auth_oauth.py tests/test_onboarding.py; uv run mypy main.py schemas.py`
+- [x] 2.1 OAuth-state split migration upgrades, downgrades to `20260806_01`, and re-upgrades cleanly
+- [x] 2.2 OAuth state is hash-only, opaque, expiring, single-use, and rejects malformed/expired/replayed values
+- [x] 2.3 Mocked GitHub callback atomically creates one EULA-pending identity and owned onboarding grant, including concurrent identity/state cases
+- [x] 2.4 Callback/provider failures cannot create a token, Demo license, EULA state, lifecycle event, or partial state consumption
+- [x] 2.5 EULA delivery with Bearer onboarding credential and version-mismatch retry behavior pass
+- [x] 2.6 Explicit acceptance atomically assigns one Demo license, records transition lifecycle events, creates issuance state, and rejects replay/concurrent duplication
+- [x] 2.7 OAuth state, GitHub access token, and onboarding credential are absent from logs and error bodies
+- [x] 2.8 Onboarding migration, lint, and type checks pass: `uv run ruff check main.py models.py schemas.py migrations tests/test_auth_oauth.py tests/test_onboarding.py; uv run mypy main.py models.py schemas.py`
 
 #### Manual
 
-- [ ] 2.7 Real GitHub login completes the explicit EULA acceptance sequence
-- [ ] 2.8 Replayed callback/acceptance credentials cannot advance state or duplicate entitlement events
+- [x] 2.9 Real GitHub login completes the explicit EULA acceptance sequence using Bearer onboarding state
+- [x] 2.10 Replayed callback/acceptance credentials cannot advance state or duplicate entitlement events; stale EULA version preserves retry ability
 
 ### Phase 3: One-Time Token Issuance, Owner Expiration, and Demo Enforcement
 
 #### Automated
 
 - [ ] 3.1 One issuance credential creates one named hash-only token and returns raw token + opaque ID only once: `uv run pytest tests/test_auth_token.py tests/test_onboarding.py -v`
-- [ ] 3.2 Invalid, expired, wrong-purpose, and replayed issuance credentials are rejected: `uv run pytest tests/test_auth_token.py -v`
+- [ ] 3.2 Invalid, expired, wrong-purpose onboarding, and replayed issuance credentials are rejected: `uv run pytest tests/test_auth_token.py -v`
 - [ ] 3.3 Owner token expiration by target ID works, hides other-user tokens, and makes target token return 401: `uv run pytest tests/test_auth_token.py -v`
 - [ ] 3.4 Active non-Demo license rejection and active Demo access to probe/search pass: `uv run pytest tests/test_auth_dependencies.py tests/test_auth_probe.py tests/test_limitations_search.py -v`
-- [ ] 3.5 Removed user-ID HMAC contract has no remaining application/test dependency: `uv run pytest tests/test_auth_token.py -v; uv run ruff check main.py auth.py schemas.py tests`
+- [ ] 3.5 Removed HMAC contract and `SECRET_KEY` requirement have no remaining application/test/deployment dependency: `uv run pytest tests/test_auth_token.py -v; uv run ruff check main.py auth.py schemas.py tests`
 - [ ] 3.6 Token lifecycle type checks pass: `uv run mypy main.py auth.py schemas.py tests/test_auth_token.py tests/test_auth_dependencies.py`
 
 #### Manual

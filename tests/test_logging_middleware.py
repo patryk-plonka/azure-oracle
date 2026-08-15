@@ -6,6 +6,7 @@ from collections.abc import Generator
 import pytest
 from fastapi.testclient import TestClient
 
+from logging_middleware import SuppressUvicornAccessLogFilter
 from main import app
 from tests.conftest import RAW_TOKEN
 
@@ -30,6 +31,7 @@ def log_records() -> Generator[list[logging.LogRecord], None, None]:
         logging.getLogger("azure_oracle.request"),
         logging.getLogger("azure_oracle.error"),
         logging.getLogger("uvicorn.error"),
+        logging.getLogger("uvicorn.access"),
     ]
     levels = {logger: logger.level for logger in loggers}
     disabled = {logger: logger.disabled for logger in loggers}
@@ -209,3 +211,13 @@ def test_raw_token_not_in_error_body(log_records, raising_route):
     assert response.json() == {"detail": "Internal Server Error"}
     assert RAW_TOKEN not in response.text
     assert RAW_TOKEN not in _log_text(log_records)
+
+
+def test_uvicorn_access_filter_suppresses_callback_query_state(log_records):
+    state = "oauth-state-must-not-be-logged"
+    access_logger = logging.getLogger("uvicorn.access")
+    access_logger.info('GET /auth/callback?state=%s 200', state)
+    assert state not in _log_text(log_records)
+    assert not SuppressUvicornAccessLogFilter().filter(
+        logging.LogRecord("uvicorn.access", logging.INFO, __file__, 0, "message", (), None)
+    )

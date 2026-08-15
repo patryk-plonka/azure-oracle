@@ -50,6 +50,13 @@ class SuppressUvicornTracebackFilter(logging.Filter):
         return record.exc_info is None
 
 
+class SuppressUvicornAccessLogFilter(logging.Filter):
+    """Suppress Uvicorn access lines because they contain callback query strings."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return False
+
+
 request_logger = logging.getLogger("azure_oracle.request")
 error_logger = logging.getLogger("azure_oracle.error")
 

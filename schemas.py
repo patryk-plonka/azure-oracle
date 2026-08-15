@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LimitationRecord(BaseModel):
@@ -35,3 +35,49 @@ class SearchResponse(BaseModel):
     support_status: str
     record_count: int
     records: list[LimitationRecord]
+
+
+class OAuthCallbackResponse(BaseModel):
+    next_action: str
+    login: str
+    onboarding_credential: str
+    onboarding_expires_at: datetime
+
+
+class EulaDocumentResponse(BaseModel):
+    version: str
+    content: str
+
+
+class EulaAcceptanceRequest(BaseModel):
+    version: str = Field(min_length=1, max_length=64)
+
+
+class LicenseSummary(BaseModel):
+    license_type: str
+    is_active: bool
+    created_at: datetime
+
+
+class EulaAcceptanceResponse(BaseModel):
+    next_action: str
+    license: LicenseSummary
+    issuance_credential: str
+    issuance_expires_at: datetime
+
+
+class TokenCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class TokenCreateResponse(BaseModel):
+    token: str
+    token_id: str
+    name: str
+    expires_at: datetime
+
+
+class TokenExpirationResponse(BaseModel):
+    expired: bool
+    token_id: str
+    expires_at: datetime

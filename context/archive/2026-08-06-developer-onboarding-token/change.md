@@ -1,9 +1,9 @@
 change_id: developer-onboarding-token
 title: Developer onboarding token
-status: impl_reviewed
+status: archived
 created: 2026-08-06
 updated: 2026-08-15
-archived_at: null
+archived_at: 2026-08-15T16:34:30Z
 
 ## Notes
 

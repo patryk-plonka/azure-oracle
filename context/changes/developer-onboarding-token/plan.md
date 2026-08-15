@@ -411,6 +411,6 @@ This MVP has low QPS and a small dataset. The added paths perform indexed lookup
 
 #### Manual
 
-- [x] 4.5 README-driven clean-environment onboarding completes without server internals — 1ae6856
-- [x] 4.6 Deployed callback origin, Railway variables, health, and fresh protected search are verified — 1ae6856
-- [x] 4.7 One-time raw-token display and recovery warning are confirmed in the live flow — 1ae6856
+- [x] 4.5 README-driven clean-environment onboarding completes without server internals — 1ae6856 (manual verification attestation)
+- [x] 4.6 Deployed callback origin, Railway variables, health, and fresh protected search are verified — 1ae6856 (manual verification attestation)
+- [x] 4.7 One-time raw-token display and recovery warning are confirmed in the live flow — 1ae6856 (manual verification attestation)

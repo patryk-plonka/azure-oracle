@@ -25,7 +25,6 @@ htmlcov/
 
 # Repository-local planning and configuration material
 .github/
-context/
 concept/
 concept.md
 

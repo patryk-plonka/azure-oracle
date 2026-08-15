@@ -1,8 +1,8 @@
 change_id: developer-onboarding-token
 title: Developer onboarding token
-status: implementing
+status: implemented
 created: 2026-08-06
-updated: 2026-08-07
+updated: 2026-08-15
 archived_at: null
 
 ## Notes

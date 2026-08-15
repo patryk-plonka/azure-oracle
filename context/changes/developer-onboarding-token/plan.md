@@ -404,13 +404,13 @@ This MVP has low QPS and a small dataset. The added paths perform indexed lookup
 
 #### Automated
 
-- [x] 4.1 Complete mocked onboarding journey and replay/failure checks pass: `uv run pytest tests/test_auth_oauth.py tests/test_onboarding.py tests/test_auth_token.py -v`
-- [x] 4.2 OAuth state, onboarding/issuance credentials, and raw tokens are absent from logs and error bodies: `uv run pytest tests/test_logging_middleware.py -v`
-- [x] 4.3 Existing auth/probe/protected-search regressions pass: `uv run pytest tests/test_auth_dependencies.py tests/test_auth_probe.py tests/test_limitations_search.py -v`
-- [x] 4.4 Full suite, lint, and type checks pass: `uv run pytest tests/ -v; uv run ruff check .; uv run mypy .`
+- [x] 4.1 Complete mocked onboarding journey and replay/failure checks pass: `uv run pytest tests/test_auth_oauth.py tests/test_onboarding.py tests/test_auth_token.py -v` — 1ae6856
+- [x] 4.2 OAuth state, onboarding/issuance credentials, and raw tokens are absent from logs and error bodies: `uv run pytest tests/test_logging_middleware.py -v` — 1ae6856
+- [x] 4.3 Existing auth/probe/protected-search regressions pass: `uv run pytest tests/test_auth_dependencies.py tests/test_auth_probe.py tests/test_limitations_search.py -v` — 1ae6856
+- [x] 4.4 Full suite, lint, and type checks pass: `uv run pytest tests/ -v; uv run ruff check .; uv run mypy .` — 1ae6856
 
 #### Manual
 
-- [x] 4.5 README-driven clean-environment onboarding completes without server internals
-- [x] 4.6 Deployed callback origin, Railway variables, health, and fresh protected search are verified
-- [x] 4.7 One-time raw-token display and recovery warning are confirmed in the live flow
+- [x] 4.5 README-driven clean-environment onboarding completes without server internals — 1ae6856
+- [x] 4.6 Deployed callback origin, Railway variables, health, and fresh protected search are verified — 1ae6856
+- [x] 4.7 One-time raw-token display and recovery warning are confirmed in the live flow — 1ae6856

@@ -108,3 +108,66 @@ def test_expired_onboarding_grant_is_rejected(auth_db_session: Session, seeded_o
     with TestClient(app, base_url="http://localhost") as client:
         response = client.get("/auth/eula", headers={"Authorization": "Bearer fixture-onboarding-grant"})
     assert response.status_code == 401
+
+
+def test_complete_onboarding_journey_creates_and_expires_owned_token(auth_db_session: Session):
+    with TestClient(app, base_url="http://localhost") as client, _mock_github():
+        actor_state = _start_login(client)
+        actor_callback = client.get(
+            "/auth/callback", params={"code": "actor-code", "state": actor_state}
+        )
+        assert actor_callback.status_code == 200
+        onboarding_credential = actor_callback.json()["onboarding_credential"]
+
+        eula = client.get(
+            "/auth/eula",
+            headers={"Authorization": f"Bearer {onboarding_credential}"},
+        )
+        assert eula.status_code == 200
+        acceptance = client.post(
+            "/auth/eula/accept",
+            headers={"Authorization": f"Bearer {onboarding_credential}"},
+            json={"version": eula.json()["version"]},
+        )
+        assert acceptance.status_code == 200
+        issuance_credential = acceptance.json()["issuance_credential"]
+        actor = client.post(
+            "/auth/tokens",
+            headers={"Authorization": f"Bearer {issuance_credential}"},
+            json={"name": "actor"},
+        )
+        assert actor.status_code == 200
+
+        target_state = _start_login(client)
+        target_callback = client.get(
+            "/auth/callback", params={"code": "target-code", "state": target_state}
+        )
+        target_onboarding = target_callback.json()["onboarding_credential"]
+        target_acceptance = client.post(
+            "/auth/eula/accept",
+            headers={"Authorization": f"Bearer {target_onboarding}"},
+            json={"version": EULA_VERSION},
+        )
+        target = client.post(
+            "/auth/tokens",
+            headers={"Authorization": f"Bearer {target_acceptance.json()['issuance_credential']}"},
+            json={"name": "target"},
+        )
+        assert target.status_code == 200
+
+        assert client.get(
+            "/limitations/search",
+            params={"q": "Azure"},
+            headers={"Authorization": f"Bearer {target.json()['token']}"},
+        ).status_code == 200
+        expiration = client.post(
+            f"/auth/tokens/{target.json()['token_id']}/expire",
+            headers={"Authorization": f"Bearer {actor.json()['token']}"},
+        )
+
+    assert expiration.status_code == 200
+    with TestClient(app, base_url="http://localhost") as client:
+        assert client.get(
+            "/auth/probe",
+            headers={"Authorization": f"Bearer {target.json()['token']}"},
+        ).status_code == 401

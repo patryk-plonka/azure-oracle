@@ -388,29 +388,29 @@ This MVP has low QPS and a small dataset. The added paths perform indexed lookup
 
 #### Automated
 
-- [x] 3.1 One issuance credential creates one named hash-only token and returns raw token + opaque ID only once: `uv run pytest tests/test_auth_token.py tests/test_onboarding.py -v`
-- [x] 3.2 Invalid, expired, wrong-purpose onboarding, and replayed issuance credentials are rejected: `uv run pytest tests/test_auth_token.py -v`
-- [x] 3.3 Owner token expiration by target ID works, hides other-user tokens, and makes target token return 401: `uv run pytest tests/test_auth_token.py -v`
-- [x] 3.4 Active non-Demo license rejection and active Demo access to probe/search pass: `uv run pytest tests/test_auth_dependencies.py tests/test_auth_probe.py tests/test_limitations_search.py -v`
-- [x] 3.5 Removed HMAC contract and `SECRET_KEY` requirement have no remaining application/test/deployment dependency: `uv run pytest tests/test_auth_token.py -v; uv run ruff check main.py auth.py schemas.py tests`
-- [x] 3.6 Token lifecycle type checks pass: `uv run mypy main.py auth.py schemas.py tests/test_auth_token.py tests/test_auth_dependencies.py`
+- [x] 3.1 One issuance credential creates one named hash-only token and returns raw token + opaque ID only once: `uv run pytest tests/test_auth_token.py tests/test_onboarding.py -v` — 39dd520
+- [x] 3.2 Invalid, expired, wrong-purpose onboarding, and replayed issuance credentials are rejected: `uv run pytest tests/test_auth_token.py -v` — 39dd520
+- [x] 3.3 Owner token expiration by target ID works, hides other-user tokens, and makes target token return 401: `uv run pytest tests/test_auth_token.py -v` — 39dd520
+- [x] 3.4 Active non-Demo license rejection and active Demo access to probe/search pass: `uv run pytest tests/test_auth_dependencies.py tests/test_auth_probe.py tests/test_limitations_search.py -v` — 39dd520
+- [x] 3.5 Removed HMAC contract and `SECRET_KEY` requirement have no remaining application/test/deployment dependency: `uv run pytest tests/test_auth_token.py -v; uv run ruff check main.py auth.py schemas.py tests` — 39dd520
+- [x] 3.6 Token lifecycle type checks pass: `uv run mypy main.py auth.py schemas.py tests/test_auth_token.py tests/test_auth_dependencies.py` — 39dd520
 
 #### Manual
 
-- [x] 3.7 Two named tokens can be used independently and one can expire the other by ID
-- [x] 3.8 A different user cannot discover or expire another user's token
+- [x] 3.7 Two named tokens can be used independently and one can expire the other by ID — 39dd520
+- [x] 3.8 A different user cannot discover or expire another user's token — 39dd520
 
 ### Phase 4: Documentation, Security Regression Coverage, and Release Verification
 
 #### Automated
 
-- [ ] 4.1 Complete mocked onboarding journey and replay/failure checks pass: `uv run pytest tests/test_auth_oauth.py tests/test_onboarding.py tests/test_auth_token.py -v`
-- [ ] 4.2 OAuth state, onboarding/issuance credentials, and raw tokens are absent from logs and error bodies: `uv run pytest tests/test_logging_middleware.py -v`
-- [ ] 4.3 Existing auth/probe/protected-search regressions pass: `uv run pytest tests/test_auth_dependencies.py tests/test_auth_probe.py tests/test_limitations_search.py -v`
-- [ ] 4.4 Full suite, lint, and type checks pass: `uv run pytest tests/ -v; uv run ruff check .; uv run mypy .`
+- [x] 4.1 Complete mocked onboarding journey and replay/failure checks pass: `uv run pytest tests/test_auth_oauth.py tests/test_onboarding.py tests/test_auth_token.py -v`
+- [x] 4.2 OAuth state, onboarding/issuance credentials, and raw tokens are absent from logs and error bodies: `uv run pytest tests/test_logging_middleware.py -v`
+- [x] 4.3 Existing auth/probe/protected-search regressions pass: `uv run pytest tests/test_auth_dependencies.py tests/test_auth_probe.py tests/test_limitations_search.py -v`
+- [x] 4.4 Full suite, lint, and type checks pass: `uv run pytest tests/ -v; uv run ruff check .; uv run mypy .`
 
 #### Manual
 
-- [ ] 4.5 README-driven clean-environment onboarding completes without server internals
-- [ ] 4.6 Deployed callback origin, Railway variables, health, and fresh protected search are verified
-- [ ] 4.7 One-time raw-token display and recovery warning are confirmed in the live flow
+- [x] 4.5 README-driven clean-environment onboarding completes without server internals
+- [x] 4.6 Deployed callback origin, Railway variables, health, and fresh protected search are verified
+- [x] 4.7 One-time raw-token display and recovery warning are confirmed in the live flow

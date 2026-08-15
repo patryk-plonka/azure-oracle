@@ -2,12 +2,15 @@
 
 import logging
 from collections.abc import Generator
+from urllib.parse import parse_qs, urlparse
 
 import pytest
+import respx
 from fastapi.testclient import TestClient
+from httpx import Response
 
 from logging_middleware import SuppressUvicornAccessLogFilter
-from main import app
+from main import EULA_VERSION, GITHUB_TOKEN_URL, GITHUB_USER_API, app
 from tests.conftest import RAW_TOKEN
 
 
@@ -221,3 +224,48 @@ def test_uvicorn_access_filter_suppresses_callback_query_state(log_records):
     assert not SuppressUvicornAccessLogFilter().filter(
         logging.LogRecord("uvicorn.access", logging.INFO, __file__, 0, "message", (), None)
     )
+
+
+def test_onboarding_credentials_and_raw_token_stay_out_of_logs_and_errors(
+    auth_db_session, log_records, raising_route
+):
+    with TestClient(
+        app, base_url="http://localhost", raise_server_exceptions=False
+    ) as client, respx.mock() as router:
+        router.post(GITHUB_TOKEN_URL).mock(
+            return_value=Response(200, json={"access_token": "github-access-token"})
+        )
+        router.get(GITHUB_USER_API).mock(
+            return_value=Response(200, json={"id": 77, "login": "log-safe-user"})
+        )
+        login = client.get("/auth/login", follow_redirects=False)
+        state = parse_qs(urlparse(login.headers["location"]).query)["state"][0]
+        callback = client.get(
+            "/auth/callback", params={"code": "provider-code", "state": state}
+        )
+        onboarding_credential = callback.json()["onboarding_credential"]
+        acceptance = client.post(
+            "/auth/eula/accept",
+            headers={"Authorization": f"Bearer {onboarding_credential}"},
+            json={"version": EULA_VERSION},
+        )
+        issuance_credential = acceptance.json()["issuance_credential"]
+        token_response = client.post(
+            "/auth/tokens",
+            headers={"Authorization": f"Bearer {issuance_credential}"},
+            json={"name": "log-safe-token"},
+        )
+        raw_token = token_response.json()["token"]
+        error_response = client.get(
+            raising_route,
+            headers={"Authorization": f"Bearer {raw_token}"},
+        )
+
+    assert callback.status_code == 200
+    assert acceptance.status_code == 200
+    assert token_response.status_code == 200
+    assert error_response.status_code == 500
+    captured_text = _log_text(log_records)
+    for secret in (state, onboarding_credential, issuance_credential, raw_token):
+        assert secret not in captured_text
+        assert secret not in error_response.text

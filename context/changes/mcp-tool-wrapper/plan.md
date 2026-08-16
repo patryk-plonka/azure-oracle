@@ -311,14 +311,14 @@ No database or data migration is required. The only remaining dependency migrati
 
 #### Automated
 
-- [x] 3.1 Documentation references the implemented module, variables, tool, and test command correctly
-- [x] 3.2 MCP tests pass after documentation and roadmap edits: `uv run pytest tests/test_mcp_server.py -v`
-- [x] 3.3 Full regression suite passes: `uv run pytest tests/ -v`
-- [x] 3.4 Linting passes: `uv run ruff check .`
-- [x] 3.5 Type checking passes: `uv run mypy .`
+- [x] 3.1 Documentation references the implemented module, variables, tool, and test command correctly — c6e889f
+- [x] 3.2 MCP tests pass after documentation and roadmap edits: `uv run pytest tests/test_mcp_server.py -v` — c6e889f
+- [x] 3.3 Full regression suite passes: `uv run pytest tests/ -v` — c6e889f
+- [x] 3.4 Linting passes: `uv run ruff check .` — c6e889f
+- [x] 3.5 Type checking passes: `uv run mypy .` — c6e889f
 
 #### Manual
 
-- [x] 3.6 Clean MCP-host setup works without database or OAuth application settings
-- [x] 3.7 Documentation contains only placeholders and never presents a token as a tool argument or committed value
-- [x] 3.8 Roadmap S-03 wording matches the local stdio-wrapper scope
+- [x] 3.6 Clean MCP-host setup works without database or OAuth application settings — c6e889f
+- [x] 3.7 Documentation contains only placeholders and never presents a token as a tool argument or committed value — c6e889f
+- [x] 3.8 Roadmap S-03 wording matches the local stdio-wrapper scope — c6e889f

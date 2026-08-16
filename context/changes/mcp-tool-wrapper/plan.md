@@ -10,7 +10,7 @@ The MCP server is an adapter, not a second query or authorization implementation
 
 The completed REST query core already provides the required protected-data contract: `main.py` validates `q`, `region`, and `sku`; applies `require_active_license`; returns verified-only records; and serializes a `SearchResponse` whose records require provenance. `auth.py` rejects missing, malformed, unknown, expired, and orphaned Bearer tokens with `401`, then rejects users lacking an active Demo license with `403`.
 
-What is missing is the MCP integration surface. There is no MCP SDK dependency, MCP server module, stdio entry point, configuration boundary, outbound client, or MCP-specific test coverage. `httpx` and `respx` are already available for the new authorized HTTP boundary and its isolated tests.
+Phase 1 added the MCP v2 dependency and independently testable REST forwarding boundary in `mcp_server.py`. What remains is MCP v2 server registration, the stdio entry point, a direct `anyio` development dependency, and in-memory adapter coverage. `httpx` and `respx` remain the outbound-client and isolated HTTP-test dependencies.
 
 ## Desired End State
 
@@ -24,8 +24,8 @@ The tool never accepts a token argument, never persists or logs the configured t
 - `auth.py:38-81` — the REST route’s dependency validates the Bearer token and active `demo` license for every protected response.
 - `schemas.py:6-36` — `SearchResponse` and `LimitationRecord` already express the required verdict and provenance contract as Pydantic models.
 - `logging_middleware.py:7-14` and `AGENTS.md:8-10` — tokens must never appear in logs, error responses, source control, or public result data.
-- `pyproject.toml:6-21` — `httpx` and the `respx` development dependency already support a bounded, mockable HTTP forwarding client; an MCP SDK remains to be added.
-- The official `mcp` Python SDK documents a typed server API and standard transports, including the selected stdio transport. It requires Python 3.10+, which the project’s Python 3.12 baseline satisfies.
+- `pyproject.toml:6-24` and `uv.lock` — the project is synchronized to official `mcp==2.0.0`, whose v2 server API is `mcp.server.MCPServer`; it does not provide `FastMCP`.
+- The same SDK supports the selected stdio transport through `MCPServer.run()` and the in-memory `Client(mcp)` adapter-test harness. Python 3.12 satisfies its runtime requirement.
 
 ## What We're NOT Doing
 
@@ -43,7 +43,7 @@ The tool never accepts a token argument, never persists or logs the configured t
 Add a small `mcp_server.py` module with two separable concerns:
 
 1. A configuration and REST-client boundary reads `AZLIMITS_API_BASE_URL` and `AZLIMITS_API_TOKEN`, validates the base URL and token presence, applies a 10-second connect/read timeout, disables redirect following, sends the token only as the authorization header, validates a successful payload as `SearchResponse`, and maps failures to dedicated exceptions whose messages start with a stable error code.
-2. An official-SDK stdio server registers one typed `search_limitations` tool. The tool exposes `q`, `region`, and `sku`, delegates only to the REST-client boundary, and returns the validated search response as structured MCP content. Client failures are re-raised as ordinary exceptions so the SDK returns `is_error=True`; do not raise `MCPError`.
+2. An official-MCP-v2 `MCPServer` registers one typed `search_limitations` tool. The tool exposes `q`, `region`, and `sku`, delegates only to the REST-client boundary, and returns the validated search response as structured MCP content. Client failures are re-raised as ordinary exceptions so the SDK returns `is_error=True`; do not raise `MCPError`.
 
 Phase 1 tests call the client boundary directly with `respx`-mocked HTTP responses. Phase 2 adapter tests use the official in-memory `Client(mcp)` harness. Neither path needs a database, a running FastAPI server, live secrets, or a live MCP host. The README will give an explicit setup path that references the existing onboarding flow and commands the user to place their raw token only in an approved environment or host-secret configuration.
 
@@ -53,7 +53,7 @@ The HTTP client is the authorization boundary from the MCP process: no tool code
 
 Configuration and error paths must not include the token, the full `Authorization` header, a response body, a redirect `Location`, or an API URL query string in a raised tool error or log message. The error vocabulary is intentionally stable so callers can distinguish remedial actions without receiving lower-level server details.
 
-Official MCP Python SDK v2 has no typed string error-code field. Raise a dedicated exception whose message starts with the stable code plus a short remediation sentence (`azlimits_authentication_error: check the configured API token.`). The SDK wraps that as an `is_error=True` tool result the model can read. Do not raise `MCPError`: that becomes a JSON-RPC failure the model never sees.
+Official MCP Python SDK v2 uses `MCPServer`, not `FastMCP`. Raise a dedicated exception whose message starts with the stable code plus a short remediation sentence (`azlimits_authentication_error: check the configured API token.`). `MCPServer` wraps that as an `is_error=True` tool result the model can read. Do not raise `MCPError`: that becomes a JSON-RPC failure the model never sees.
 
 ## Phase 1: Authorized REST Client Boundary
 
@@ -135,12 +135,12 @@ Register the single MCP tool through the official SDK and expose a runnable stdi
 
 **Contract**:
 
-- Create an official-SDK server named for AzLimits and register exactly one `search_limitations` tool.
+- Import `MCPServer` from `mcp.server`, create an official-MCP-v2 server named for AzLimits, and register exactly one `search_limitations` tool. Do not import or reference `FastMCP`.
 - The tool signature exposes required `q` plus optional `region` and `sku`; it does not expose API URLs, tokens, authorization headers, or database-oriented inputs.
 - The tool description tells agents that it returns known, verified Azure limitation records and a support-status verdict with source evidence. It does not claim that an empty result proves the absence of a limitation.
 - Delegate the complete invocation to the Phase 1 boundary. On success, return the validated `SearchResponse` as structured MCP content unchanged; do not produce a prose-only summary or drop records/provenance.
 - Re-raise the Phase 1 dedicated exceptions unchanged so the official SDK returns `is_error=True` with the exception message in `content`. Do not catch them and `return` an error string, and do not raise `MCPError`. The message already starts with the stable code plus concise remediation; the adapter must not append API status bodies, headers, token values, or untrusted response text.
-- Provide the SDK-supported executable entry point (`if __name__ == "__main__": mcp.run()`) for the default stdio transport. Running it must not require FastAPI settings, database settings, OAuth credentials, or a database connection.
+- Provide the MCP-v2-supported executable entry point (`if __name__ == "__main__": mcp.run()`) for the default stdio transport. Running it must not require FastAPI settings, database settings, OAuth credentials, or a database connection.
 
 #### 2. MCP adapter tests
 
@@ -148,7 +148,7 @@ Register the single MCP tool through the official SDK and expose a runnable stdi
 
 **Intent**: Prove the registered tool exposes the agreed consumer contract and does not replace the validated REST-client behavior with an alternate code path.
 
-**Contract**: Use the official in-memory harness `async with Client(mcp)` and `@pytest.mark.anyio`, with the Phase 1 `respx` HTTP mock in place. Declare `anyio` as a direct dev dependency so its pytest plugin is collected; do not add a second async runner. Assert:
+**Contract**: Add `anyio` as a direct development dependency and regenerate `uv.lock`. Use the official MCP-v2 in-memory harness `async with Client(mcp)` where `mcp` is the registered `MCPServer`, plus `@pytest.mark.anyio`, with the Phase 1 `respx` HTTP mock in place. Do not add a second async runner. Assert:
 
 - The tool schema requires `q`, permits omitted `region`/`sku`, and does not declare a credential parameter.
 - A successful tool call returns `structured_content` equivalent to the complete `SearchResponse`, including all record provenance fields and the support-status verdict.
@@ -259,7 +259,7 @@ The response can contain up to the REST endpoint’s existing 500-record limit. 
 
 ## Migration Notes
 
-No database or data migration is required. The only dependency migration is the normal `uv` lockfile update after adding the official MCP SDK and the `anyio` pytest plugin used by Phase 2 adapter tests. Existing API consumers and the FastAPI application remain unchanged.
+No database or data migration is required. The only remaining dependency migration is the normal `uv` lockfile update after adding direct `anyio` support for the Phase 2 pytest plugin. The already-locked official MCP SDK remains on its v2 major line. Existing API consumers and the FastAPI application remain unchanged.
 
 ## References
 
@@ -282,30 +282,30 @@ No database or data migration is required. The only dependency migration is the 
 
 #### Automated
 
-- [x] 1.1 Focused MCP client tests pass: `uv run pytest tests/test_mcp_server.py -v`
-- [x] 1.2 Full regression suite passes: `uv run pytest tests/ -v`
-- [x] 1.3 Linting passes: `uv run ruff check .`
-- [x] 1.4 Type checking passes: `uv run mypy mcp_server.py tests/test_mcp_server.py`
+- [x] 1.1 Focused MCP client tests pass: `uv run pytest tests/test_mcp_server.py -v` — 12ffc9e
+- [x] 1.2 Full regression suite passes: `uv run pytest tests/ -v` — 12ffc9e
+- [x] 1.3 Linting passes: `uv run ruff check .` — 12ffc9e
+- [x] 1.4 Type checking passes: `uv run mypy mcp_server.py tests/test_mcp_server.py` — 12ffc9e
 
 #### Manual
 
-- [x] 1.5 Review confirms no token or secret-bearing HTTP data is logged or exposed by the new boundary
-- [x] 1.6 Review confirms the lockfile uses the official MCP SDK on the selected v2 major line
+- [x] 1.5 Review confirms no token or secret-bearing HTTP data is logged or exposed by the new boundary — 12ffc9e
+- [x] 1.6 Review confirms the lockfile uses the official MCP SDK on the selected v2 major line — 12ffc9e
 
 ### Phase 2: Stdio MCP Search Tool
 
 #### Automated
 
-- [ ] 2.1 MCP client and adapter tests pass: `uv run pytest tests/test_mcp_server.py -v`
-- [ ] 2.2 Full regression suite passes: `uv run pytest tests/ -v`
-- [ ] 2.3 Linting passes: `uv run ruff check .`
-- [ ] 2.4 Type checking passes: `uv run mypy mcp_server.py tests/test_mcp_server.py`
+- [x] 2.1 MCP client and adapter tests pass: `uv run pytest tests/test_mcp_server.py -v`
+- [x] 2.2 Full regression suite passes: `uv run pytest tests/ -v`
+- [x] 2.3 Linting passes: `uv run ruff check .`
+- [x] 2.4 Type checking passes: `uv run mypy mcp_server.py tests/test_mcp_server.py`
 
 #### Manual
 
-- [ ] 2.5 Stdio server exposes a credential-free `search_limitations` schema
-- [ ] 2.6 `search_limitations(q="AKS")` returns verdict and complete source-backed records
-- [ ] 2.7 Invalid or expired token returns a non-secret authentication-class MCP failure
+- [x] 2.5 Stdio server exposes a credential-free `search_limitations` schema
+- [x] 2.6 `search_limitations(q="AKS")` returns verdict and complete source-backed records
+- [x] 2.7 Invalid or expired token returns a non-secret authentication-class MCP failure
 
 ### Phase 3: Operator Setup and Slice Reconciliation
 

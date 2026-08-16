@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import os
+from typing import Annotated
 from urllib.parse import urlsplit
 
 import httpx
-from pydantic import ValidationError
+from mcp.server import MCPServer
+from mcp_types import CallToolResult, TextContent
+from pydantic import Field, ValidationError
 
 from schemas import SearchResponse
 
@@ -144,3 +147,51 @@ class AzLimitsApiClient:
             raise AzLimitsUpstreamUnavailableError(
                 "azlimits_upstream_unavailable: retry when the API is available."
             ) from error
+
+
+mcp = MCPServer(
+    "azlimits",
+    title="AzLimits",
+    description="Search known, verified Azure limitation records with source evidence.",
+)
+
+
+def _tool_error(error: AzLimitsMcpError) -> CallToolResult:
+    """Return a safe tool error without exposing upstream response details."""
+    return CallToolResult(
+        content=[TextContent(type="text", text=str(error))],
+        is_error=True,
+    )
+
+
+def _tool_success(result: SearchResponse) -> CallToolResult:
+    """Return the complete validated REST contract as structured MCP content."""
+    structured_content = result.model_dump(mode="json")
+    return CallToolResult(
+        content=[TextContent(type="text", text=result.model_dump_json())],
+        structured_content=structured_content,
+    )
+
+
+@mcp.tool(
+    description=(
+        "Return known, verified Azure limitation records and a support-status verdict "
+        "with source evidence. An empty result does not prove that no limitation exists."
+    )
+)
+def search_limitations(
+    q: Annotated[str, Field(min_length=1, max_length=200)],
+    region: Annotated[str | None, Field(max_length=200)] = None,
+    sku: Annotated[str | None, Field(max_length=200)] = None,
+) -> CallToolResult:
+    """Search the protected AzLimits REST API without accepting credentials as inputs."""
+    try:
+        return _tool_success(AzLimitsApiClient.from_environment().search_limitations(q, region, sku))
+    except AzLimitsMcpError as error:
+        # MCP v2 wraps raised tool exceptions with its own prefix. Return the already
+        # safe result directly so callers can reliably identify the stable error code.
+        return _tool_error(error)
+
+
+if __name__ == "__main__":
+    mcp.run()

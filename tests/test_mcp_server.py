@@ -3,6 +3,8 @@ from __future__ import annotations
 import httpx
 import pytest
 import respx
+from mcp.client import Client
+from mcp_types import TextContent
 
 from mcp_server import (
     AzLimitsApiClient,
@@ -10,6 +12,7 @@ from mcp_server import (
     AzLimitsConfigurationError,
     AzLimitsLicenseError,
     AzLimitsUpstreamUnavailableError,
+    mcp,
 )
 from schemas import SearchResponse
 
@@ -186,3 +189,67 @@ def test_out_of_contract_input_does_not_issue_request(
 
     assert str(raised.value).startswith("azlimits_upstream_unavailable:")
     assert not route.called
+
+
+@pytest.mark.anyio
+async def test_mcp_tool_schema_exposes_only_search_inputs() -> None:
+    async with Client(mcp) as client:
+        tools = await client.list_tools()
+
+    assert len(tools.tools) == 1
+    tool = tools.tools[0]
+    assert tool.name == "search_limitations"
+    assert tool.input_schema["required"] == ["q"]
+    assert set(tool.input_schema["properties"]) == {"q", "region", "sku"}
+    assert "token" not in tool.input_schema["properties"]
+    assert "authorization" not in tool.input_schema["properties"]
+    assert "url" not in tool.input_schema["properties"]
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_mcp_tool_returns_complete_structured_search_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    route = respx.get(SEARCH_URL).mock(return_value=httpx.Response(200, json=search_payload()))
+    monkeypatch.setenv("AZLIMITS_API_BASE_URL", API_URL)
+    monkeypatch.setenv("AZLIMITS_API_TOKEN", TOKEN)
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("search_limitations", {"q": "AKS"})
+
+    assert not result.is_error
+    assert result.structured_content == SearchResponse.model_validate(search_payload()).model_dump(mode="json")
+    request = route.calls.last.request
+    assert dict(request.url.params) == {"q": "AKS"}
+
+
+@pytest.mark.anyio
+@respx.mock
+@pytest.mark.parametrize(
+    ("status_code", "error_code"),
+    [
+        (401, "azlimits_authentication_error:"),
+        (403, "azlimits_license_error:"),
+        (500, "azlimits_upstream_unavailable:"),
+    ],
+)
+async def test_mcp_tool_returns_safe_client_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+    error_code: str,
+) -> None:
+    response = httpx.Response(status_code, content=b"server-body-secret")
+    respx.get(SEARCH_URL).mock(return_value=response)
+    monkeypatch.setenv("AZLIMITS_API_BASE_URL", API_URL)
+    monkeypatch.setenv("AZLIMITS_API_TOKEN", TOKEN)
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("search_limitations", {"q": "AKS"})
+
+    assert result.is_error
+    content = result.content[0]
+    assert isinstance(content, TextContent)
+    assert content.text.startswith(error_code)
+    assert TOKEN not in content.text
+    assert "server-body-secret" not in content.text

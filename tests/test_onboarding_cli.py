@@ -7,6 +7,7 @@ import respx
 from onboarding_cli import (
     OnboardingApiClient,
     OnboardingCliError,
+    TerminalRevealHandoff,
     main,
     run_onboarding,
     validate_api_base_url,
@@ -18,6 +19,35 @@ ONBOARDING_CREDENTIAL = "onboarding-sentinel-credential"
 ISSUANCE_CREDENTIAL = "issuance-sentinel-credential"
 RAW_TOKEN = "raw-api-token-sentinel"
 UPSTREAM_SECRET = "upstream-response-secret"
+
+
+class FakeTerminalStream:
+    def __init__(self, *, is_tty: bool = True, fail_write: bool = False) -> None:
+        self.is_tty = is_tty
+        self.fail_write = fail_write
+        self.writes: list[str] = []
+        self.flush_count = 0
+
+    def isatty(self) -> bool:
+        return self.is_tty
+
+    def write(self, value: str) -> int:
+        if self.fail_write:
+            raise OSError("stream failure")
+        self.writes.append(value)
+        return len(value)
+
+    def flush(self) -> None:
+        if self.fail_write:
+            raise OSError("flush failure")
+        self.flush_count += 1
+
+
+def _interactive_handoff(
+    *, reveal_stream: FakeTerminalStream | None = None
+) -> tuple[TerminalRevealHandoff, FakeTerminalStream]:
+    stream = reveal_stream or FakeTerminalStream()
+    return TerminalRevealHandoff(FakeTerminalStream(), stream), stream
 
 
 def test_validates_safe_api_origins() -> None:
@@ -208,7 +238,7 @@ def test_interactive_workflow_uses_hidden_credential_and_handoff() -> None:
     token_route = respx.post(f"{API_URL}/auth/tokens").mock(return_value=_token_response())
     opened: list[str] = []
     output: list[str] = []
-    handoffs: list[tuple[str, str]] = []
+    handoff, reveal_stream = _interactive_handoff()
     client = OnboardingApiClient(API_URL)
 
     def browser_opener(url: str) -> bool:
@@ -217,12 +247,12 @@ def test_interactive_workflow_uses_hidden_credential_and_handoff() -> None:
 
     assert run_onboarding(
         client,
-        input_fn=lambda _: "yes",
+        input_fn=lambda prompt: "reveal" if "Reveal" in prompt else "yes",
         hidden_input=lambda _: ONBOARDING_CREDENTIAL,
         output=output.append,
         browser_opener=browser_opener,
         token_name="local-mcp",
-        completion_handoff=lambda raw_token, response: handoffs.append((raw_token, response.name)),
+        reveal_handoff=handoff,
     )
 
     assert opened == [f"{API_URL}/auth/login"]
@@ -230,7 +260,8 @@ def test_interactive_workflow_uses_hidden_credential_and_handoff() -> None:
     assert accept_route.calls.last.request.content == b'{"version":"demo-v1"}'
     assert token_route.calls.last.request.headers["Authorization"] == f"Bearer {ISSUANCE_CREDENTIAL}"
     assert token_route.calls.last.request.content == b'{"name":"local-mcp"}'
-    assert handoffs == [(RAW_TOKEN, "local-mcp")]
+    assert reveal_stream.writes == [f"{RAW_TOKEN}\n"]
+    assert reveal_stream.flush_count == 1
     rendered = "\n".join(output)
     for secret in (ONBOARDING_CREDENTIAL, ISSUANCE_CREDENTIAL, RAW_TOKEN):
         assert secret not in rendered
@@ -270,14 +301,16 @@ def test_eula_accept_failure_is_not_retried_and_requires_restart(status: int) ->
     )
     client = OnboardingApiClient(API_URL)
     output: list[str] = []
+    handoff, _ = _interactive_handoff()
 
     assert not run_onboarding(
         client,
-        input_fn=lambda _: "yes",
+        input_fn=lambda prompt: "reveal" if "Reveal" in prompt else "yes",
         hidden_input=lambda _: ONBOARDING_CREDENTIAL,
         output=output.append,
         browser_opener=lambda _: True,
         token_name="local-mcp",
+        reveal_handoff=handoff,
     )
 
     assert accept_route.call_count == 1
@@ -296,14 +329,16 @@ def test_token_timeout_is_not_retried_and_requires_restart() -> None:
     )
     client = OnboardingApiClient(API_URL)
     output: list[str] = []
+    handoff, _ = _interactive_handoff()
 
     assert not run_onboarding(
         client,
-        input_fn=lambda _: "yes",
+        input_fn=lambda prompt: "reveal" if "Reveal" in prompt else "yes",
         hidden_input=lambda _: ONBOARDING_CREDENTIAL,
         output=output.append,
         browser_opener=lambda _: True,
         token_name="local-mcp",
+        reveal_handoff=handoff,
     )
 
     assert token_route.call_count == 1
@@ -311,3 +346,118 @@ def test_token_timeout_is_not_retried_and_requires_restart() -> None:
     assert "Restart onboarding" in rendered
     assert ISSUANCE_CREDENTIAL not in rendered
     assert UPSTREAM_SECRET not in rendered
+
+
+@respx.mock
+def test_completion_guidance_is_secret_free_and_host_scoped() -> None:
+    respx.get(f"{API_URL}/auth/eula").mock(return_value=_eula_response())
+    respx.post(f"{API_URL}/auth/eula/accept").mock(return_value=_acceptance_response())
+    respx.post(f"{API_URL}/auth/tokens").mock(return_value=_token_response())
+    output: list[str] = []
+    handoff, _ = _interactive_handoff()
+
+    assert run_onboarding(
+        OnboardingApiClient(API_URL),
+        input_fn=lambda prompt: "reveal" if "Reveal" in prompt else "yes",
+        hidden_input=lambda _: ONBOARDING_CREDENTIAL,
+        output=output.append,
+        browser_opener=lambda _: True,
+        token_name="local-mcp",
+        reveal_handoff=handoff,
+    )
+
+    rendered = "\n".join(output)
+    assert "uv run python mcp_server.py" in rendered
+    assert '"AZLIMITS_API_BASE_URL": "https://azlimits.example.test"' in rendered
+    assert '"AZLIMITS_API_TOKEN": "${input:azlimits-api-token}"' in rendered
+    assert '"password": true' in rendered
+    assert "already-running PowerShell, VS Code" in rendered
+    for secret in (ONBOARDING_CREDENTIAL, ISSUANCE_CREDENTIAL, RAW_TOKEN):
+        assert secret not in rendered
+    for forbidden_operation in ("setx", "registry", "powershell assignment"):
+        assert forbidden_operation not in rendered.lower()
+    assert "Do not put it in shell history" in rendered
+    assert ".env files" in rendered
+
+
+@respx.mock
+@pytest.mark.parametrize("response", ["no", EOFError(), KeyboardInterrupt()])
+def test_reveal_rejection_prevents_token_issuance(response: str | BaseException) -> None:
+    respx.get(f"{API_URL}/auth/eula").mock(return_value=_eula_response())
+    respx.post(f"{API_URL}/auth/eula/accept").mock(return_value=_acceptance_response())
+    token_route = respx.post(f"{API_URL}/auth/tokens").mock(return_value=_token_response())
+    output: list[str] = []
+    responses = iter(["yes", response])
+    handoff, reveal_stream = _interactive_handoff()
+
+    def input_fn(_: str) -> str:
+        value = next(responses)
+        if isinstance(value, BaseException):
+            raise value
+        return value
+
+    assert not run_onboarding(
+        OnboardingApiClient(API_URL),
+        input_fn=input_fn,
+        hidden_input=lambda _: ONBOARDING_CREDENTIAL,
+        output=output.append,
+        browser_opener=lambda _: True,
+        token_name="local-mcp",
+        reveal_handoff=handoff,
+    )
+
+    assert token_route.call_count == 0
+    assert reveal_stream.writes == []
+    assert RAW_TOKEN not in "\n".join(output)
+
+
+@respx.mock
+@pytest.mark.parametrize("input_is_tty,reveal_is_tty", [(False, True), (True, False)])
+def test_noninteractive_reveal_boundary_prevents_token_issuance(
+    input_is_tty: bool, reveal_is_tty: bool
+) -> None:
+    respx.get(f"{API_URL}/auth/eula").mock(return_value=_eula_response())
+    respx.post(f"{API_URL}/auth/eula/accept").mock(return_value=_acceptance_response())
+    token_route = respx.post(f"{API_URL}/auth/tokens").mock(return_value=_token_response())
+    output: list[str] = []
+    reveal_stream = FakeTerminalStream(is_tty=reveal_is_tty)
+    handoff = TerminalRevealHandoff(FakeTerminalStream(is_tty=input_is_tty), reveal_stream)
+
+    assert not run_onboarding(
+        OnboardingApiClient(API_URL),
+        input_fn=lambda prompt: "reveal" if "Reveal" in prompt else "yes",
+        hidden_input=lambda _: ONBOARDING_CREDENTIAL,
+        output=output.append,
+        browser_opener=lambda _: True,
+        token_name="local-mcp",
+        reveal_handoff=handoff,
+    )
+
+    assert token_route.call_count == 0
+    assert reveal_stream.writes == []
+    assert RAW_TOKEN not in "\n".join(output)
+
+
+@respx.mock
+def test_reveal_write_failure_never_retries_or_discloses_token() -> None:
+    respx.get(f"{API_URL}/auth/eula").mock(return_value=_eula_response())
+    respx.post(f"{API_URL}/auth/eula/accept").mock(return_value=_acceptance_response())
+    token_route = respx.post(f"{API_URL}/auth/tokens").mock(return_value=_token_response())
+    output: list[str] = []
+    handoff, reveal_stream = _interactive_handoff(reveal_stream=FakeTerminalStream(fail_write=True))
+
+    assert not run_onboarding(
+        OnboardingApiClient(API_URL),
+        input_fn=lambda prompt: "reveal" if "Reveal" in prompt else "yes",
+        hidden_input=lambda _: ONBOARDING_CREDENTIAL,
+        output=output.append,
+        browser_opener=lambda _: True,
+        token_name="local-mcp",
+        reveal_handoff=handoff,
+    )
+
+    assert token_route.call_count == 1
+    assert reveal_stream.writes == []
+    rendered = "\n".join(output)
+    assert "cannot be recovered" in rendered
+    assert RAW_TOKEN not in rendered

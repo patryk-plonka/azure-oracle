@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import json
 import sys
 import webbrowser
 from collections.abc import Callable
 from datetime import datetime
+from typing import Protocol
 from urllib.parse import SplitResult, urlsplit
 
 import httpx
@@ -21,6 +23,41 @@ _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 class OnboardingCliError(Exception):
     """A stable command-line failure that never includes sensitive request data."""
+
+
+class InteractiveStream(Protocol):
+    """Minimal terminal capability required for the confidential reveal boundary."""
+
+    def isatty(self) -> bool: ...
+
+    def write(self, value: str) -> object: ...
+
+    def flush(self) -> None: ...
+
+
+class TerminalRevealHandoff:
+    """Reveal a new token once through verified interactive terminal streams."""
+
+    def __init__(self, confirmation_input: InteractiveStream, reveal_output: InteractiveStream) -> None:
+        self._confirmation_input = confirmation_input
+        self._reveal_output = reveal_output
+
+    def is_interactive(self) -> bool:
+        """Require both the approval input and secret destination to be terminals."""
+        return self._confirmation_input.isatty() and self._reveal_output.isatty()
+
+    def confirm(self, input_fn: Callable[[str], str]) -> bool:
+        """Collect the explicit consent required before irreversible issuance."""
+        try:
+            response = input_fn("Reveal the new token once now? Type reveal to continue: ")
+        except (EOFError, KeyboardInterrupt):
+            return False
+        return response.strip().lower() == "reveal"
+
+    def reveal(self, raw_token: str) -> None:
+        """Write and flush the raw token only to the isolated reveal stream."""
+        self._reveal_output.write(f"{raw_token}\n")
+        self._reveal_output.flush()
 
 
 def _safe_error() -> OnboardingCliError:
@@ -168,6 +205,27 @@ def _read_token_name(
     return name or None
 
 
+def _confirm_terminal_reveal(
+    handoff: TerminalRevealHandoff,
+    input_fn: Callable[[str], str],
+    output: Callable[[str], None],
+) -> bool:
+    """Validate the terminal boundary and separate consent before issuing a token."""
+    if not handoff.is_interactive():
+        output("Token creation requires interactive terminal input and output; no token was created.")
+        return False
+
+    output(
+        "The new raw token will be displayed once in this terminal. Terminal scrollback, "
+        "recordings, remote sessions, or screen sharing may retain it. Enter it immediately "
+        "into your MCP host's hidden secret prompt or store."
+    )
+    if not handoff.confirm(input_fn):
+        output("Token reveal was not approved; no token was created.")
+        return False
+    return True
+
+
 def run_onboarding(
     client: OnboardingApiClient,
     *,
@@ -176,7 +234,7 @@ def run_onboarding(
     hidden_input: Callable[[str], str] = getpass.getpass,
     output: Callable[[str], None] = print,
     browser_opener: Callable[[str], bool] = webbrowser.open,
-    completion_handoff: Callable[[str, TokenCreateResponse], None] | None = None,
+    reveal_handoff: TerminalRevealHandoff | None = None,
 ) -> bool:
     """Run the consent-preserving onboarding sequence without exposing secrets."""
     try:
@@ -211,6 +269,12 @@ def run_onboarding(
         output("Onboarding cancelled before token creation.")
         return False
 
+    if reveal_handoff is None:
+        output("Token creation requires an interactive terminal reveal; no token was created.")
+        return False
+    if not _confirm_terminal_reveal(reveal_handoff, input_fn, output):
+        return False
+
     try:
         token = client.create_token(acceptance.issuance_credential, selected_name)
     except OnboardingCliError as error:
@@ -218,17 +282,63 @@ def run_onboarding(
         output("Restart onboarding; token creation may already have consumed the credential.")
         return False
 
-    if completion_handoff is not None:
-        completion_handoff(token.token, token)
-    _print_completion(output, token)
+    try:
+        reveal_handoff.reveal(token.token)
+    except (OSError, ValueError):
+        output(
+            "The one-time token may have been issued but could not be displayed safely. "
+            "It cannot be recovered by this command; restart onboarding to create a new token."
+        )
+        return False
+    _print_completion(output, client.base_url, token)
     return True
 
 
-def _print_completion(output: Callable[[str], None], token: TokenCreateResponse) -> None:
-    """Report safe token metadata; the raw token stays inside the process."""
+def _print_completion(
+    output: Callable[[str], None], api_base_url: str, token: TokenCreateResponse
+) -> None:
+    """Report safe host-setup guidance without rendering the raw API token."""
     expires_at: datetime = token.expires_at
     output(f"Created API token '{token.name}' that expires at {expires_at.isoformat()}.")
-    output("Keep the raw token private; it is not displayed by this command.")
+    output("Keep the raw token private after its one-time terminal display.")
+    output(
+        "Enter the one-time token directly into your MCP host's approved hidden secret "
+        "prompt or store. Do not put it in shell history, tool calls, committed files, "
+        ".env files, or normal terminal input."
+    )
+    output("VS Code user-level MCP configuration template (placeholders only):")
+    template = {
+        "inputs": [
+            {
+                "id": "azlimits-api-token",
+                "type": "promptString",
+                "description": "AzLimits API token",
+                "password": True,
+            }
+        ],
+        "servers": {
+            "azlimits": {
+                "type": "stdio",
+                "command": "uv",
+                "args": ["run", "python", "mcp_server.py"],
+                "cwd": "<repository-directory>",
+                "env": {
+                    "AZLIMITS_API_BASE_URL": api_base_url,
+                    "AZLIMITS_API_TOKEN": "${input:azlimits-api-token}",
+                },
+            }
+        },
+    }
+    output(json.dumps(template, indent=2))
+    output(
+        "For another MCP host, launch `uv run python mcp_server.py` as a local stdio "
+        "server and supply only AZLIMITS_API_BASE_URL plus the raw token through that "
+        "host's approved secret mechanism. Interactive secret inputs are host-specific."
+    )
+    output(
+        "This standalone CLI cannot configure an already-running PowerShell, VS Code, "
+        "or other parent process."
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -239,7 +349,15 @@ def main(argv: list[str] | None = None) -> int:
     except OnboardingCliError as error:
         print(error, file=sys.stderr)
         return 1
-    return 0 if run_onboarding(client, token_name=args.token_name) else 1
+    return (
+        0
+        if run_onboarding(
+            client,
+            token_name=args.token_name,
+            reveal_handoff=TerminalRevealHandoff(sys.stdin, sys.stdout),
+        )
+        else 1
+    )
 
 
 if __name__ == "__main__":

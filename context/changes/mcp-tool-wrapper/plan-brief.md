@@ -1,4 +1,69 @@
-# MCP Tool Wrapper — Plan Brief
+# MCP Tool Wrapper Phase 2 SDK Mismatch — Plan Brief
+
+> Full plan: `context/changes/mcp-tool-wrapper/plan.md`
+> Frame brief: `context/changes/mcp-tool-wrapper/frame.md`
+> Research: `context/changes/mcp-tool-wrapper/research.md`
+
+## What & Why
+
+> **The actual problem to plan around is**: Phase 2 contains an SDK API assumption incompatible with the already selected and synchronized official MCP v2 package, plus an unfulfilled direct `anyio` test dependency requirement.
+
+The plan correction keeps the protected REST forwarding design intact while making its MCP v2 integration implementable and testable against the package the project actually locks.
+
+## Starting Point
+
+Phase 1 added the safe `AzLimitsApiClient` boundary and locked `mcp==2.0.0`.
+The active environment matches that lockfile, but v2 exports `MCPServer` rather than `FastMCP`; the intended in-memory `Client(mcp)` test harness remains available.
+
+## Desired End State
+
+Phase 2 will register exactly one credential-free stdio tool using MCP v2's `MCPServer` API. Its adapter tests will use `Client(mcp)` and pytest's AnyIO plugin declared directly in the development dependencies, while retaining the existing source-backed response and safe failure behavior.
+
+## Key Decisions Made
+
+| Decision | Choice | Why | Source |
+| --- | --- | --- | --- |
+| MCP server API | `mcp.server.MCPServer` | It is the official API exported by locked `mcp==2.0.0`; `FastMCP` is absent. | Frame |
+| Transport | Default stdio via `mcp.run()` | Preserves the approved local-only MCP server scope. | Plan |
+| Adapter test harness | In-memory `Client(mcp)` | MCP v2 supports it for an `MCPServer` without a host process. | Frame |
+| Async test dependency | Direct `anyio` dev dependency | Makes the plugin required by Phase 2 explicit rather than relying on transitive installation. | Frame |
+
+## Scope
+
+**In scope:**
+- Correct Phase 2's v2 server API contract to `MCPServer`.
+- Require direct `anyio` development dependency and lockfile update.
+- Retain the standard `Client(mcp)` adapter-test contract.
+
+**Out of scope:**
+- Changing the MCP major version or replacing the locked package.
+- Changing REST authorization, query logic, provenance, or failure vocabulary.
+- Adding an MCP HTTP transport, database access, or FastAPI integration.
+
+## Architecture / Approach
+
+`MCPServer("AzLimits")` hosts one typed tool, which delegates exclusively to the existing `AzLimitsApiClient`; it returns validated `SearchResponse` data or re-raises safe client exceptions. Tests connect in memory with `Client(mcp)`, with outbound REST traffic still isolated by `respx`.
+
+## Phases at a Glance
+
+| Phase | What it delivers | Key risk |
+| --- | --- | --- |
+| 2. Stdio MCP Search Tool | Correct MCP v2 server/tool and adapter tests. | API/layout drift from the locked SDK. |
+| 3. Operator Setup and Slice Reconciliation | Safe local-host instructions and roadmap status. | Secret-handling guidance drifting from runtime behavior. |
+
+**Prerequisites:** `mcp==2.0.0` remains synchronized; Phase 1 client boundary is complete.
+**Estimated effort:** ~1–2 focused sessions across the remaining two phases.
+
+## Open Risks & Assumptions
+
+- The plan relies on the currently locked MCP v2 API; a future major SDK change requires a separate compatibility review.
+- Manual stdio-host validation still needs a disposable developer token and a running AzLimits API.
+
+## Success Criteria (Summary)
+
+- The single tool exposes only `q`, optional `region`, and optional `sku`.
+- In-memory adapter tests preserve the complete structured, provenance-backed REST response.
+- Authentication, license, configuration, and upstream errors remain safe and secret-free.# MCP Tool Wrapper — Plan Brief
 
 > Full plan: `context/changes/mcp-tool-wrapper/plan.md`
 > Frame brief: `context/changes/mcp-tool-wrapper/frame.md`

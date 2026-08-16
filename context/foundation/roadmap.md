@@ -53,7 +53,7 @@ provenance, served through a protected endpoint).
 | F-04 | observability-logging-floor | (foundation) request/error logging middleware with secrets stripped | — | NFR (minimal logging floor), FR-013 | done |
 | S-01 | rest-search-query-core | user can query limitations via the REST search endpoint and receive source-backed records with a support-status verdict | F-01, F-02, F-03, F-04 | US-01, FR-008, FR-010, FR-016, FR-006 | done |
 | S-02 | developer-onboarding-token | user can log in with GitHub, accept EULA, get Demo license, generate/expire a token | F-03 | US-02, FR-001, FR-002, FR-003, FR-004, FR-005 | done |
-| S-03 | mcp-tool-wrapper | agent can query the same query core through an MCP tool | S-01 | US-01, FR-007 | proposed |
+| S-03 | mcp-tool-wrapper | agent can query the same query core through an MCP tool | S-01 | US-01, FR-007 | planned |
 
 ## Streams
 
@@ -163,13 +163,14 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 - **Outcome:** an AI agent can query the same query core through an MCP tool and receive the identical source-backed limitation records with a support-status verdict.
 - **Change ID:** mcp-tool-wrapper
+- **Implementation plan:** `context/changes/mcp-tool-wrapper/plan.md`
 - **PRD refs:** US-01, FR-007 (MCP tool query)
 - **Prerequisites:** S-01 (the query core must exist before wrapping as MCP)
 - **Parallel with:** —
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Sequenced after S-01 (the north star) because the MCP wrapper is a thin surface over the already-validated query core — wrapping before the core is proven would couple two risks. Risk: if the MCP tool returns results without the token+license gate, the PRD §Access Control guardrail is violated — mitigated by reusing F-03's middleware.
-- **Status:** proposed
+- **Status:** planned — active slice in `context/changes/mcp-tool-wrapper/`; do not mark done until implementation, verification, and review are complete.
 
 ## Backlog Handoff
 
@@ -181,7 +182,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 | F-04 | observability-logging-floor | Observability floor: request/error logging middleware with secret stripping | yes | — |
 | S-01 | rest-search-query-core | REST search endpoint: query core + provenance + support-status verdict | no | North star. Run `/10x-plan rest-search-query-core` after F-01–F-04 land. |
 | S-02 | developer-onboarding-token | Developer onboarding: GitHub login + EULA + Demo license + token generation/expiration | no | Parallel with S-01. |
-| S-03 | mcp-tool-wrapper | MCP tool wrapper over the query core | no | After S-01. |
+| S-03 | mcp-tool-wrapper | MCP tool wrapper over the query core | no | Active planned slice: `context/changes/mcp-tool-wrapper/`; local stdio wrapper only, after S-01. |
 
 ## Open Roadmap Questions
 

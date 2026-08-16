@@ -296,29 +296,29 @@ No database or data migration is required. The only remaining dependency migrati
 
 #### Automated
 
-- [x] 2.1 MCP client and adapter tests pass: `uv run pytest tests/test_mcp_server.py -v`
-- [x] 2.2 Full regression suite passes: `uv run pytest tests/ -v`
-- [x] 2.3 Linting passes: `uv run ruff check .`
-- [x] 2.4 Type checking passes: `uv run mypy mcp_server.py tests/test_mcp_server.py`
+- [x] 2.1 MCP client and adapter tests pass: `uv run pytest tests/test_mcp_server.py -v` — f31cc48
+- [x] 2.2 Full regression suite passes: `uv run pytest tests/ -v` — f31cc48
+- [x] 2.3 Linting passes: `uv run ruff check .` — f31cc48
+- [x] 2.4 Type checking passes: `uv run mypy mcp_server.py tests/test_mcp_server.py` — f31cc48
 
 #### Manual
 
-- [x] 2.5 Stdio server exposes a credential-free `search_limitations` schema
-- [x] 2.6 `search_limitations(q="AKS")` returns verdict and complete source-backed records
-- [x] 2.7 Invalid or expired token returns a non-secret authentication-class MCP failure
+- [x] 2.5 Stdio server exposes a credential-free `search_limitations` schema — f31cc48
+- [x] 2.6 `search_limitations(q="AKS")` returns verdict and complete source-backed records — f31cc48
+- [x] 2.7 Invalid or expired token returns a non-secret authentication-class MCP failure — f31cc48
 
 ### Phase 3: Operator Setup and Slice Reconciliation
 
 #### Automated
 
-- [ ] 3.1 Documentation references the implemented module, variables, tool, and test command correctly
-- [ ] 3.2 MCP tests pass after documentation and roadmap edits: `uv run pytest tests/test_mcp_server.py -v`
-- [ ] 3.3 Full regression suite passes: `uv run pytest tests/ -v`
-- [ ] 3.4 Linting passes: `uv run ruff check .`
-- [ ] 3.5 Type checking passes: `uv run mypy .`
+- [x] 3.1 Documentation references the implemented module, variables, tool, and test command correctly
+- [x] 3.2 MCP tests pass after documentation and roadmap edits: `uv run pytest tests/test_mcp_server.py -v`
+- [x] 3.3 Full regression suite passes: `uv run pytest tests/ -v`
+- [x] 3.4 Linting passes: `uv run ruff check .`
+- [x] 3.5 Type checking passes: `uv run mypy .`
 
 #### Manual
 
-- [ ] 3.6 Clean MCP-host setup works without database or OAuth application settings
-- [ ] 3.7 Documentation contains only placeholders and never presents a token as a tool argument or committed value
-- [ ] 3.8 Roadmap S-03 wording matches the local stdio-wrapper scope
+- [x] 3.6 Clean MCP-host setup works without database or OAuth application settings
+- [x] 3.7 Documentation contains only placeholders and never presents a token as a tool argument or committed value
+- [x] 3.8 Roadmap S-03 wording matches the local stdio-wrapper scope

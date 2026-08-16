@@ -74,6 +74,48 @@ payloads. OAuth state, onboarding credentials, and issuance credentials are
 short-lived and single-use; repeat the prior step when one has expired or was
 consumed.
 
+## MCP Tool Setup
+
+Complete the developer onboarding flow first. When `POST /auth/tokens` returns
+the raw API token, save that one-time value immediately in an approved secret
+store; it cannot be recovered later. The local MCP process needs only these
+settings:
+
+- `AZLIMITS_API_BASE_URL` — the base URL of the running AzLimits API, such as
+	`https://azlimits.example.com`.
+- `AZLIMITS_API_TOKEN` — the raw API token retrieved from the approved secret
+	store.
+
+For local development, configure those values through the MCP host's secret
+configuration or process environment. The following deliberately uses a
+placeholder rather than a real secret:
+
+```powershell
+$env:AZLIMITS_API_BASE_URL = "https://azlimits.example.com"
+$env:AZLIMITS_API_TOKEN = "<retrieve-from-approved-secret-store>"
+uv run python mcp_server.py
+```
+
+Register the same command with the MCP host as a local **stdio** server, with
+the two variables supplied from its secret/environment configuration. The
+server is a separate local process: it does not require `DATABASE_URL`, OAuth
+application credentials, or a database connection. Its supported tool is
+`search_limitations(q, region?, sku?)`, which returns the REST support-status
+verdict and complete source-backed records. An empty result does not prove that
+no limitation exists.
+
+The tool has no token argument. Never commit, print, paste into a tool call, or
+place the API token in shell history or logs. The server reports only safe,
+stable failure classes:
+
+- `azlimits_configuration_error` — provide valid MCP API URL and token
+	settings.
+- `azlimits_authentication_error` — check that the configured API token is
+	current and valid.
+- `azlimits_license_error` — check that the token owner has an active Demo
+	license.
+- `azlimits_upstream_unavailable` — retry after the AzLimits API is available.
+
 ## Verification
 
 Use a disposable PostgreSQL database for `TEST_DATABASE_URL`, distinct from

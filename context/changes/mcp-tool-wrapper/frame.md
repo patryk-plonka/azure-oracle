@@ -59,3 +59,79 @@ The plan should focus on the missing MCP integration contract and its observable
 - Source files: `auth.py:38-81`; `main.py:347-407`; `main.py:441-490`; `schemas.py:5-20`; `pyproject.toml:6-21`; `tests/test_limitations_search.py:1-50`
 - Related research: `context/changes/mcp-tool-wrapper/research.md`
 - Investigation tasks: read-only Explore investigations for API auth boundary, MCP configuration gap, boundary preservation, and independent issue identification
+
+---
+
+# Frame Brief: MCP Tool Wrapper Phase 2 SDK Mismatch
+
+> Framing step during implementation. This document records the observed
+> dependency/API mismatch separately from its initially assumed cause.
+
+## Reported Observation
+
+`uv run` cannot import `mcp.server.fastmcp` although the project declares
+`mcp>=2,<3`; `anyio` is also absent as a direct development dependency.
+
+## Initial Framing (preserved)
+
+- **User's stated cause or approach**: Phase 1's dependency or lockfile state may be incomplete or inconsistent with Phase 2.
+- **User's proposed direction**: Frame the mismatch before deciding whether implementation should adapt, skip, or be re-planned.
+- **Pre-dispatch narrowing**: The leading concern is plan accuracy: its selected SDK API may not match the declared `mcp>=2,<3` package.
+
+## Dimension Map
+
+The observation could originate at any of these dimensions:
+
+1. **Dependency resolution and environment selection** — the active environment could differ from the resolved lockfile.
+2. **SDK package layout/API** — the selected v2 package could expose server registration at a different module path.  ← initial framing
+3. **Plan dependency specification** — the selected range could omit the dependency version or API verification Phase 2 requires.
+4. **Phase 2 test-harness assumption** — the documented in-memory client harness could be absent from the selected SDK.
+
+## Hypothesis Investigation
+
+| Hypothesis | Evidence | Verdict |
+| --- | --- | --- |
+| Environment drift explains the import failure | `pyproject.toml` declares `mcp>=2,<3`; `uv.lock` and `.venv` both resolve/install `mcp==2.0.0`. | NONE |
+| The v2 SDK uses a different server API | Installed `mcp.server` exports `MCPServer`; its package contains no `fastmcp` module or `FastMCP` symbol. | STRONG |
+| The manifest misses a Phase 2 direct test dependency | `plan.md` Phase 2 requires direct `anyio`; `pyproject.toml` includes it only transitively through `mcp`. | STRONG |
+| `Client(mcp)` is unsupported in v2 | Installed `mcp.client.Client` documents in-process `MCPServer` support, including `async with Client(mcp)`. | NONE |
+
+## Narrowing Signals
+
+- The active environment exactly matches the lockfile, so synchronization cannot make `mcp.server.fastmcp` available.
+- The selected `mcp==2.0.0` retains the planned in-memory test style but names its server class `MCPServer`.
+- Phase 2's direct-`anyio` requirement has not yet been carried into the development dependency group.
+
+## Cross-System Convention
+
+This repository uses `uv` and `uv.lock` as the dependency source of truth.
+The lockfile and environment agree, so implementation must target the
+official API actually selected by the approved v2 dependency rather than an
+API path associated with another major-version layout.
+
+## Reframed (or Confirmed) Problem Statement
+
+> **The actual problem to plan around is**: Phase 2 contains an SDK API assumption incompatible with the already selected and synchronized official MCP v2 package, plus an unfulfilled direct `anyio` test dependency requirement.
+
+The initial suspicion of an incomplete dependency installation does not hold.
+The implementation can retain `mcp>=2,<3` and the in-memory client-test
+approach, but must use v2's `MCPServer` API and declare `anyio` directly before
+claiming the Phase 2 contract is satisfied.
+
+## Confidence
+
+- **HIGH** — the lockfile, installed package metadata, package exports, and in-memory client implementation all agree.
+
+## What Changes for /10x-plan
+
+The existing plan's stdio-server intent remains valid, but its Phase 2
+implementation must target `from mcp.server import MCPServer` rather than
+`FastMCP`; the direct development dependency requirement for `anyio` must also
+be reconciled. No REST client or authorization design change is needed.
+
+## References
+
+- Source files: `pyproject.toml:6-24`; `uv.lock` `mcp` package record; `mcp_server.py:1-129`; `context/changes/mcp-tool-wrapper/plan.md` Phase 2.
+- Installed SDK: `.venv/Lib/site-packages/mcp/server/__init__.py`; `.venv/Lib/site-packages/mcp/client/client.py`.
+- Related research: `context/changes/mcp-tool-wrapper/research.md`.
+- Investigation tasks: installed SDK layout, plan-assumption comparison, lockfile/environment-alignment exploration.

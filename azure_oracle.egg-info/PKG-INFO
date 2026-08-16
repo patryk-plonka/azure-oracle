@@ -1,0 +1,146 @@
+Metadata-Version: 2.4
+Name: azure-oracle
+Version: 0.1.0
+Summary: Add your description here
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: alembic>=1.16.0
+Requires-Dist: fastapi>=0.139.2
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: mcp<3,>=2
+Requires-Dist: psycopg[binary]>=3.2.0
+Requires-Dist: pydantic>=2
+Requires-Dist: sqlalchemy>=2.0.0
+Requires-Dist: uvicorn>=0.51.0
+Dynamic: license-file
+
+# azure-oracle
+A small, mostly-serverless service that continuously discovers, normalizes, and serves a structured database of Azure service limitations — unsupported scenarios, known issues, quotas, preview/gated behavior, deprecations, and workarounds.
+
+## Database Operations
+
+Use `DATABASE_URL` only for a local operator environment or the Railway service.
+It is never required for the PostgreSQL test suite.
+
+```powershell
+$env:DATABASE_URL = "postgresql://..."
+uv run alembic upgrade head
+uv run python seed.py concept/azure_limitations_db.csv
+```
+
+The seed command reports only source and limitation counts. It is repeatable and
+does not run during application startup or deployment.
+
+## Tests
+
+Set `TEST_DATABASE_URL` to a disposable PostgreSQL database distinct from the
+operator or Railway database. The test fixture runs migrations and truncates only
+that test database between import cases.
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql://..."
+uv run pytest tests/test_seed_import.py -v
+uv run pytest tests/ -v
+uv run ruff check .
+uv run mypy .
+```
+
+Railway receives only `DATABASE_URL`; do not configure `TEST_DATABASE_URL` as a
+Railway production variable.
+
+## Developer Onboarding
+
+The onboarding flow is JSON-first. Start the service with a PostgreSQL
+`DATABASE_URL` and these environment variables:
+
+```powershell
+$env:APP_URL = "http://localhost:8000"
+$env:GITHUB_OAUTH_CLIENT_ID = "your-github-oauth-client-id"
+$env:GITHUB_OAUTH_CLIENT_SECRET = "your-github-oauth-client-secret"
+$env:TOKEN_HASH_SALT = "a-long-random-secret"
+uv run alembic upgrade head
+uv run uvicorn main:app --reload
+```
+
+Configure the GitHub OAuth application's callback URL as
+`<APP_URL>/auth/callback`. Never commit, print, or reuse the OAuth client
+secret, token hash salt, API tokens, OAuth state, onboarding credentials, or
+issuance credentials. Do not put them in shell history, logs, or source
+control.
+
+1. Open `GET /auth/login` in a browser and approve the GitHub OAuth request.
+2. The typed JSON callback response provides an onboarding credential and the
+	next action, `accept_eula`.
+3. Send that value as `Authorization: Bearer <onboarding credential>` to
+	`GET /auth/eula`, then submit its returned version to
+	`POST /auth/eula/accept` with the same header. Acceptance assigns the Demo
+	license and returns a single-use issuance credential.
+4. Send that issuance credential as a Bearer value to `POST /auth/tokens` with
+	a non-empty token name. The successful response is the only time the raw
+	API token is shown. Store it in a password manager or other approved secret
+	store immediately; it cannot be recovered later.
+5. Use the API token as `Authorization: Bearer <api token>` with
+	`GET /limitations/search?q=<query>`.
+6. To expire a token, retain a different active token for the same user and
+	call `POST /auth/tokens/<token id>/expire` with that actor token's Bearer
+	header. A token owned by another user is reported as not found.
+
+OpenAPI at `/docs` is the source of truth for typed request and response
+payloads. OAuth state, onboarding credentials, and issuance credentials are
+short-lived and single-use; repeat the prior step when one has expired or was
+consumed.
+
+## MCP Tool Setup
+
+Complete the developer onboarding flow first. When `POST /auth/tokens` returns
+the raw API token, save that one-time value immediately in an approved secret
+store; it cannot be recovered later. The local MCP process needs only these
+settings:
+
+- `AZLIMITS_API_BASE_URL` — the base URL of the running AzLimits API, such as
+	`https://azlimits.example.com`.
+- `AZLIMITS_API_TOKEN` — the raw API token retrieved from the approved secret
+	store.
+
+For local development, configure those values through the MCP host's secret
+configuration or process environment. The following deliberately uses a
+placeholder rather than a real secret:
+
+```powershell
+$env:AZLIMITS_API_BASE_URL = "https://azlimits.example.com"
+$env:AZLIMITS_API_TOKEN = "<retrieve-from-approved-secret-store>"
+uv run python mcp_server.py
+```
+
+Register the same command with the MCP host as a local **stdio** server, with
+the two variables supplied from its secret/environment configuration. The
+server is a separate local process: it does not require `DATABASE_URL`, OAuth
+application credentials, or a database connection. Its supported tool is
+`search_limitations(q, region?, sku?)`, which returns the REST support-status
+verdict and complete source-backed records. An empty result does not prove that
+no limitation exists.
+
+The tool has no token argument. Never commit, print, paste into a tool call, or
+place the API token in shell history or logs. The server reports only safe,
+stable failure classes:
+
+- `azlimits_configuration_error` — provide valid MCP API URL and token
+	settings.
+- `azlimits_authentication_error` — check that the configured API token is
+	current and valid.
+- `azlimits_license_error` — check that the token owner has an active Demo
+	license.
+- `azlimits_upstream_unavailable` — retry after the AzLimits API is available.
+
+## Verification
+
+Use a disposable PostgreSQL database for `TEST_DATABASE_URL`, distinct from
+`DATABASE_URL` and never configured on a production Railway service.
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql://..."
+uv run pytest tests/ -v
+uv run ruff check .
+uv run mypy .
+```

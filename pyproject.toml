@@ -15,6 +15,16 @@ dependencies = [
     "uvicorn>=0.51.0",
 ]
 
+[project.scripts]
+azlimits-onboard = "onboarding_cli:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["onboarding_cli", "schemas"]
+
 [dependency-groups]
 dev = [
     "anyio>=4.0.0",

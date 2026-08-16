@@ -1,0 +1,2 @@
+[console_scripts]
+azlimits-onboard = onboarding_cli:main

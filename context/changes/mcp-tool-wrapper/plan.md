@@ -282,15 +282,15 @@ No database or data migration is required. The only dependency migration is the 
 
 #### Automated
 
-- [ ] 1.1 Focused MCP client tests pass: `uv run pytest tests/test_mcp_server.py -v`
-- [ ] 1.2 Full regression suite passes: `uv run pytest tests/ -v`
-- [ ] 1.3 Linting passes: `uv run ruff check .`
-- [ ] 1.4 Type checking passes: `uv run mypy mcp_server.py tests/test_mcp_server.py`
+- [x] 1.1 Focused MCP client tests pass: `uv run pytest tests/test_mcp_server.py -v`
+- [x] 1.2 Full regression suite passes: `uv run pytest tests/ -v`
+- [x] 1.3 Linting passes: `uv run ruff check .`
+- [x] 1.4 Type checking passes: `uv run mypy mcp_server.py tests/test_mcp_server.py`
 
 #### Manual
 
-- [ ] 1.5 Review confirms no token or secret-bearing HTTP data is logged or exposed by the new boundary
-- [ ] 1.6 Review confirms the lockfile uses the official MCP SDK on the selected v2 major line
+- [x] 1.5 Review confirms no token or secret-bearing HTTP data is logged or exposed by the new boundary
+- [x] 1.6 Review confirms the lockfile uses the official MCP SDK on the selected v2 major line
 
 ### Phase 2: Stdio MCP Search Tool
 

@@ -8,6 +8,7 @@ from onboarding_cli import (
     OnboardingApiClient,
     OnboardingCliError,
     main,
+    run_onboarding,
     validate_api_base_url,
 )
 from schemas import EulaAcceptanceResponse, EulaDocumentResponse, TokenCreateResponse
@@ -164,3 +165,149 @@ def test_transport_failure_is_non_disclosing() -> None:
 
     assert ONBOARDING_CREDENTIAL not in str(raised.value)
     assert UPSTREAM_SECRET not in str(raised.value)
+
+
+def _eula_response() -> httpx.Response:
+    return httpx.Response(200, json={"version": "demo-v1", "content": "Terms"})
+
+
+def _acceptance_response() -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "next_action": "create_token",
+            "license": {
+                "license_type": "demo",
+                "is_active": True,
+                "created_at": "2026-08-16T00:00:00Z",
+            },
+            "issuance_credential": ISSUANCE_CREDENTIAL,
+            "issuance_expires_at": "2026-08-16T00:05:00Z",
+        },
+    )
+
+
+def _token_response() -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "token": RAW_TOKEN,
+            "token_id": "token-id",
+            "name": "local-mcp",
+            "expires_at": "2026-11-14T00:00:00Z",
+        },
+    )
+
+
+@respx.mock
+def test_interactive_workflow_uses_hidden_credential_and_handoff() -> None:
+    eula_route = respx.get(f"{API_URL}/auth/eula").mock(return_value=_eula_response())
+    accept_route = respx.post(f"{API_URL}/auth/eula/accept").mock(
+        return_value=_acceptance_response()
+    )
+    token_route = respx.post(f"{API_URL}/auth/tokens").mock(return_value=_token_response())
+    opened: list[str] = []
+    output: list[str] = []
+    handoffs: list[tuple[str, str]] = []
+    client = OnboardingApiClient(API_URL)
+
+    def browser_opener(url: str) -> bool:
+        opened.append(url)
+        return True
+
+    assert run_onboarding(
+        client,
+        input_fn=lambda _: "yes",
+        hidden_input=lambda _: ONBOARDING_CREDENTIAL,
+        output=output.append,
+        browser_opener=browser_opener,
+        token_name="local-mcp",
+        completion_handoff=lambda raw_token, response: handoffs.append((raw_token, response.name)),
+    )
+
+    assert opened == [f"{API_URL}/auth/login"]
+    assert eula_route.calls.last.request.headers["Authorization"] == f"Bearer {ONBOARDING_CREDENTIAL}"
+    assert accept_route.calls.last.request.content == b'{"version":"demo-v1"}'
+    assert token_route.calls.last.request.headers["Authorization"] == f"Bearer {ISSUANCE_CREDENTIAL}"
+    assert token_route.calls.last.request.content == b'{"name":"local-mcp"}'
+    assert handoffs == [(RAW_TOKEN, "local-mcp")]
+    rendered = "\n".join(output)
+    for secret in (ONBOARDING_CREDENTIAL, ISSUANCE_CREDENTIAL, RAW_TOKEN):
+        assert secret not in rendered
+    assert "EULA version: demo-v1" in rendered
+    assert "Terms" in rendered
+
+
+@respx.mock
+def test_declined_eula_has_no_state_changing_requests() -> None:
+    respx.get(f"{API_URL}/auth/eula").mock(return_value=_eula_response())
+    accept_route = respx.post(f"{API_URL}/auth/eula/accept").mock(return_value=_acceptance_response())
+    token_route = respx.post(f"{API_URL}/auth/tokens").mock(return_value=_token_response())
+    client = OnboardingApiClient(API_URL)
+    output: list[str] = []
+
+    assert not run_onboarding(
+        client,
+        input_fn=lambda _: "no",
+        hidden_input=lambda _: ONBOARDING_CREDENTIAL,
+        output=output.append,
+        browser_opener=lambda _: True,
+    )
+
+    assert accept_route.call_count == 0
+    assert token_route.call_count == 0
+    assert "no token was created" in "\n".join(output)
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    "status", [401, 403, 409, 500]
+)
+def test_eula_accept_failure_is_not_retried_and_requires_restart(status: int) -> None:
+    respx.get(f"{API_URL}/auth/eula").mock(return_value=_eula_response())
+    accept_route = respx.post(f"{API_URL}/auth/eula/accept").mock(
+        return_value=httpx.Response(status, content=UPSTREAM_SECRET.encode())
+    )
+    client = OnboardingApiClient(API_URL)
+    output: list[str] = []
+
+    assert not run_onboarding(
+        client,
+        input_fn=lambda _: "yes",
+        hidden_input=lambda _: ONBOARDING_CREDENTIAL,
+        output=output.append,
+        browser_opener=lambda _: True,
+        token_name="local-mcp",
+    )
+
+    assert accept_route.call_count == 1
+    rendered = "\n".join(output)
+    assert "Restart onboarding" in rendered
+    for secret in (ONBOARDING_CREDENTIAL, ISSUANCE_CREDENTIAL, RAW_TOKEN, UPSTREAM_SECRET):
+        assert secret not in rendered
+
+
+@respx.mock
+def test_token_timeout_is_not_retried_and_requires_restart() -> None:
+    respx.get(f"{API_URL}/auth/eula").mock(return_value=_eula_response())
+    respx.post(f"{API_URL}/auth/eula/accept").mock(return_value=_acceptance_response())
+    token_route = respx.post(f"{API_URL}/auth/tokens").mock(
+        side_effect=httpx.ReadTimeout(UPSTREAM_SECRET)
+    )
+    client = OnboardingApiClient(API_URL)
+    output: list[str] = []
+
+    assert not run_onboarding(
+        client,
+        input_fn=lambda _: "yes",
+        hidden_input=lambda _: ONBOARDING_CREDENTIAL,
+        output=output.append,
+        browser_opener=lambda _: True,
+        token_name="local-mcp",
+    )
+
+    assert token_route.call_count == 1
+    rendered = "\n".join(output)
+    assert "Restart onboarding" in rendered
+    assert ISSUANCE_CREDENTIAL not in rendered
+    assert UPSTREAM_SECRET not in rendered

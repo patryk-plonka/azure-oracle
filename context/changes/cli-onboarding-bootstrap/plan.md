@@ -284,33 +284,33 @@ No data migration, database change, API-route change, MCP-server change, or user
 
 #### Automated
 
-- [x] 1.1 Focused CLI tests pass: `uv run pytest tests/test_onboarding_cli.py -v`
-- [x] 1.2 Relevant auth/MCP regression tests pass: `uv run pytest tests/test_auth_oauth.py tests/test_onboarding.py tests/test_auth_token.py tests/test_mcp_server.py -v`
-- [x] 1.3 Full regression suite passes: `uv run pytest tests/ -v`
-- [x] 1.4 Linting passes: `uv run ruff check .`
-- [x] 1.5 Type checking passes: `uv run mypy .`
+- [x] 1.1 Focused CLI tests pass: `uv run pytest tests/test_onboarding_cli.py -v` — 82bb841
+- [x] 1.2 Relevant auth/MCP regression tests pass: `uv run pytest tests/test_auth_oauth.py tests/test_onboarding.py tests/test_auth_token.py tests/test_mcp_server.py -v` — 82bb841
+- [x] 1.3 Full regression suite passes: `uv run pytest tests/ -v` — 82bb841
+- [x] 1.4 Linting passes: `uv run ruff check .` — 82bb841
+- [x] 1.5 Type checking passes: `uv run mypy .` — 82bb841
 
 #### Manual
 
-- [x] 1.6 CLI help exposes no bearer credential or OAuth-secret argument
-- [x] 1.7 Malformed and remote HTTP base URLs fail before browser launch without echoing values
-- [x] 1.8 CLI source/output review confirms no credential logging or formatting
+- [x] 1.6 CLI help exposes no bearer credential or OAuth-secret argument — 82bb841
+- [x] 1.7 Malformed and remote HTTP base URLs fail before browser launch without echoing values — 82bb841
+- [x] 1.8 CLI source/output review confirms no credential logging or formatting — 82bb841
 
 ### Phase 2: Explicit Interactive Onboarding Workflow
 
 #### Automated
 
-- [ ] 2.1 Full focused CLI workflow tests pass: `uv run pytest tests/test_onboarding_cli.py -v`
-- [ ] 2.2 Existing onboarding and secret-logging tests pass: `uv run pytest tests/test_auth_oauth.py tests/test_onboarding.py tests/test_auth_token.py tests/test_logging_middleware.py -v`
-- [ ] 2.3 Full regression suite passes: `uv run pytest tests/ -v`
-- [ ] 2.4 Linting passes: `uv run ruff check .`
-- [ ] 2.5 Type checking passes: `uv run mypy .`
+- [x] 2.1 Full focused CLI workflow tests pass: `uv run pytest tests/test_onboarding_cli.py -v`
+- [x] 2.2 Existing onboarding and secret-logging tests pass: `uv run pytest tests/test_auth_oauth.py tests/test_onboarding.py tests/test_auth_token.py tests/test_logging_middleware.py -v`
+- [x] 2.3 Full regression suite passes: `uv run pytest tests/ -v`
+- [x] 2.4 Linting passes: `uv run ruff check .`
+- [x] 2.5 Type checking passes: `uv run mypy .`
 
 #### Manual
 
-- [ ] 2.6 Browser consent followed by declined EULA causes no CLI-driven token/entitlement issuance
-- [ ] 2.7 Accepted EULA creates a named token while CLI reveals only non-secret completion metadata
-- [ ] 2.8 Interrupted state-changing request instructs restart rather than automatic retry
+- [x] 2.6 Browser consent followed by declined EULA causes no CLI-driven token/entitlement issuance
+- [x] 2.7 Accepted EULA creates a named token while CLI reveals only non-secret completion metadata
+- [x] 2.8 Interrupted state-changing request instructs restart rather than automatic retry
 
 ### Phase 3: MCP-Host Handoff Documentation and Final Verification
 

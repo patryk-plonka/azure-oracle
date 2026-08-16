@@ -32,7 +32,11 @@ def get_database_url(database_url: str | None = None) -> str:
 
 
 def create_database_engine(database_url: str | None = None) -> Engine:
-    return create_engine(get_database_url(database_url), pool_pre_ping=True)
+    return create_engine(
+        get_database_url(database_url),
+        pool_pre_ping=True,
+        connect_args={"prepare_threshold": None},
+    )
 
 
 def create_session_factory(database_url: str | None = None) -> Callable[[], Session]:

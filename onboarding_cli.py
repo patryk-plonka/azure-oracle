@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import sys
 import webbrowser
 from collections.abc import Callable
+from datetime import datetime
 from urllib.parse import SplitResult, urlsplit
 
 import httpx
@@ -143,16 +145,101 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _read_affirmative_confirmation(
+    input_fn: Callable[[str], str], output: Callable[[str], None]
+) -> bool:
+    try:
+        response = input_fn("Accept these terms? Type yes to continue: ")
+    except (EOFError, KeyboardInterrupt):
+        output("Onboarding cancelled before EULA acceptance.")
+        return False
+    return response.strip().lower() == "yes"
+
+
+def _read_token_name(
+    supplied_name: str | None, input_fn: Callable[[str], str]
+) -> str | None:
+    if supplied_name is not None:
+        return supplied_name.strip() or None
+    try:
+        name = input_fn("Name for this API token: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    return name or None
+
+
+def run_onboarding(
+    client: OnboardingApiClient,
+    *,
+    token_name: str | None = None,
+    input_fn: Callable[[str], str] = input,
+    hidden_input: Callable[[str], str] = getpass.getpass,
+    output: Callable[[str], None] = print,
+    browser_opener: Callable[[str], bool] = webbrowser.open,
+    completion_handoff: Callable[[str, TokenCreateResponse], None] | None = None,
+) -> bool:
+    """Run the consent-preserving onboarding sequence without exposing secrets."""
+    try:
+        client.open_login(browser_opener)
+        output("Complete GitHub consent in the browser.")
+        onboarding_credential = hidden_input(
+            "Paste the callback onboarding credential (hidden): "
+        )
+        eula = client.get_eula(_validate_credential(onboarding_credential))
+    except (EOFError, KeyboardInterrupt):
+        output("Onboarding cancelled before EULA acceptance.")
+        return False
+    except OnboardingCliError as error:
+        output(str(error))
+        return False
+
+    output(f"EULA version: {eula.version}")
+    output(eula.content)
+    if not _read_affirmative_confirmation(input_fn, output):
+        output("Terms were not accepted; no token was created.")
+        return False
+
+    try:
+        acceptance = client.accept_eula(onboarding_credential, eula.version)
+    except OnboardingCliError as error:
+        output(str(error))
+        output("Restart onboarding; EULA acceptance may already have consumed the credential.")
+        return False
+
+    selected_name = _read_token_name(token_name, input_fn)
+    if selected_name is None:
+        output("Onboarding cancelled before token creation.")
+        return False
+
+    try:
+        token = client.create_token(acceptance.issuance_credential, selected_name)
+    except OnboardingCliError as error:
+        output(str(error))
+        output("Restart onboarding; token creation may already have consumed the credential.")
+        return False
+
+    if completion_handoff is not None:
+        completion_handoff(token.token, token)
+    _print_completion(output, token)
+    return True
+
+
+def _print_completion(output: Callable[[str], None], token: TokenCreateResponse) -> None:
+    """Report safe token metadata; the raw token stays inside the process."""
+    expires_at: datetime = token.expires_at
+    output(f"Created API token '{token.name}' that expires at {expires_at.isoformat()}.")
+    output("Keep the raw token private; it is not displayed by this command.")
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Validate configuration and begin browser-based onboarding."""
+    """Run interactive browser-based onboarding."""
     args = build_parser().parse_args(argv)
     try:
-        OnboardingApiClient(args.api_base_url).open_login()
+        client = OnboardingApiClient(args.api_base_url)
     except OnboardingCliError as error:
         print(error, file=sys.stderr)
         return 1
-    print("Browser sign-in opened. Complete consent before continuing onboarding.")
-    return 0
+    return 0 if run_onboarding(client, token_name=args.token_name) else 1
 
 
 if __name__ == "__main__":

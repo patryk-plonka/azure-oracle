@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 import pytest
 import respx
@@ -439,12 +441,24 @@ def test_noninteractive_reveal_boundary_prevents_token_issuance(
 
 
 @respx.mock
-def test_reveal_write_failure_never_retries_or_discloses_token() -> None:
+@pytest.mark.parametrize("failure", ["write", "flush"])
+def test_reveal_failure_never_retries_or_discloses_token(failure: str) -> None:
     respx.get(f"{API_URL}/auth/eula").mock(return_value=_eula_response())
     respx.post(f"{API_URL}/auth/eula/accept").mock(return_value=_acceptance_response())
     token_route = respx.post(f"{API_URL}/auth/tokens").mock(return_value=_token_response())
     output: list[str] = []
-    handoff, reveal_stream = _interactive_handoff(reveal_stream=FakeTerminalStream(fail_write=True))
+    class FailingRevealStream(FakeTerminalStream):
+        def write(self, value: str) -> int:
+            if failure == "write":
+                raise OSError("stream failure")
+            return super().write(value)
+
+        def flush(self) -> None:
+            if failure == "flush":
+                raise OSError("flush failure")
+            super().flush()
+
+    handoff, reveal_stream = _interactive_handoff(reveal_stream=FailingRevealStream())
 
     assert not run_onboarding(
         OnboardingApiClient(API_URL),
@@ -457,7 +471,26 @@ def test_reveal_write_failure_never_retries_or_discloses_token() -> None:
     )
 
     assert token_route.call_count == 1
-    assert reveal_stream.writes == []
+    assert len(reveal_stream.writes) <= 1
     rendered = "\n".join(output)
     assert "cannot be recovered" in rendered
     assert RAW_TOKEN not in rendered
+
+
+def test_operating_guide_documents_one_time_tty_reveal() -> None:
+    guide = " ".join(Path("README.md").read_text(encoding="utf-8").split())
+
+    for expected in (
+        "type `reveal`",
+        "interactive TTYs",
+        "displayed exactly once",
+        "Terminal scrollback, recordings, remote sessions, and screen sharing",
+        "If the reveal is declined, cancelled",
+        "the raw token cannot be recovered",
+        '"AZLIMITS_API_TOKEN": "${input:azlimits-api-token}"',
+        "cannot configure an already-running PowerShell, VS Code",
+    ):
+        assert expected in guide
+
+    for forbidden in ("$env:AZLIMITS_API_TOKEN", "setx", "<retrieve-from-approved-secret-store>"):
+        assert forbidden not in guide

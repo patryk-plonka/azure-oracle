@@ -1,6 +1,6 @@
 change_id: cli-onboarding-bootstrap
 title: CLI onboarding bootstrap
-status: implemented
+status: impl_reviewed
 created: 2026-08-16
 updated: 2026-08-17
 archived_at: null

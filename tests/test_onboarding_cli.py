@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from typing import Self
 
 import httpx
 import pytest
@@ -192,6 +193,31 @@ def test_typed_rest_methods_use_expected_requests() -> None:
     assert token_route.calls.last.request.content == b'{"name":"local-mcp"}'
 
 
+def test_rest_client_uses_bounded_timeout_and_disables_redirects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class CapturingClient:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def request(self, *args: object, **kwargs: object) -> httpx.Response:
+            return httpx.Response(200, json={"version": "demo-v1", "content": "Terms"})
+
+    monkeypatch.setattr("onboarding_cli.httpx.Client", CapturingClient)
+
+    assert OnboardingApiClient(API_URL).get_eula(ONBOARDING_CREDENTIAL).version == "demo-v1"
+    assert captured["follow_redirects"] is False
+    assert captured["timeout"] == httpx.Timeout(10.0)
+
+
 @respx.mock
 @pytest.mark.parametrize(
     "response",
@@ -377,6 +403,74 @@ def test_token_timeout_is_not_retried_and_requires_restart() -> None:
     rendered = "\n".join(output)
     assert "Restart onboarding" in rendered
     assert ISSUANCE_CREDENTIAL not in rendered
+    assert UPSTREAM_SECRET not in rendered
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(302, headers={"Location": "https://redirect.example.test/private"}),
+        httpx.Response(200, json={"unexpected": UPSTREAM_SECRET}),
+        httpx.Response(502, content=UPSTREAM_SECRET.encode()),
+    ],
+)
+def test_eula_accept_redirect_malformed_and_upstream_failures_are_not_retried(
+    response: httpx.Response,
+) -> None:
+    respx.get(f"{API_URL}/auth/eula").mock(return_value=_eula_response())
+    accept_route = respx.post(f"{API_URL}/auth/eula/accept").mock(return_value=response)
+    output: list[str] = []
+    handoff, _ = _interactive_handoff()
+
+    assert not run_onboarding(
+        OnboardingApiClient(API_URL),
+        input_fn=lambda prompt: "reveal" if "Reveal" in prompt else "yes",
+        hidden_input=lambda _: ONBOARDING_CREDENTIAL,
+        output=output.append,
+        browser_opener=lambda _: True,
+        token_name="local-mcp",
+        reveal_handoff=handoff,
+    )
+
+    assert accept_route.call_count == 1
+    rendered = "\n".join(output)
+    assert "Restart onboarding" in rendered
+    assert UPSTREAM_SECRET not in rendered
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(302, headers={"Location": "https://redirect.example.test/private"}),
+        httpx.Response(200, json={"unexpected": UPSTREAM_SECRET}),
+        httpx.Response(502, content=UPSTREAM_SECRET.encode()),
+    ],
+)
+def test_token_creation_redirect_malformed_and_upstream_failures_are_not_retried(
+    response: httpx.Response,
+) -> None:
+    respx.get(f"{API_URL}/auth/eula").mock(return_value=_eula_response())
+    respx.post(f"{API_URL}/auth/eula/accept").mock(return_value=_acceptance_response())
+    token_route = respx.post(f"{API_URL}/auth/tokens").mock(return_value=response)
+    output: list[str] = []
+    handoff, _ = _interactive_handoff()
+
+    assert not run_onboarding(
+        OnboardingApiClient(API_URL),
+        input_fn=lambda prompt: "reveal" if "Reveal" in prompt else "yes",
+        hidden_input=lambda _: ONBOARDING_CREDENTIAL,
+        output=output.append,
+        browser_opener=lambda _: True,
+        token_name="local-mcp",
+        reveal_handoff=handoff,
+    )
+
+    assert token_route.call_count == 1
+    rendered = "\n".join(output)
+    assert "Restart onboarding" in rendered
+    assert RAW_TOKEN not in rendered
     assert UPSTREAM_SECRET not in rendered
 
 

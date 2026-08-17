@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import json
+import re
 import sys
 import webbrowser
 from collections.abc import Callable
@@ -18,7 +19,9 @@ from pydantic import BaseModel, ValidationError
 from schemas import EulaAcceptanceResponse, EulaDocumentResponse, TokenCreateResponse
 
 _TIMEOUT = httpx.Timeout(10.0)
+_MAX_RESPONSE_BYTES = 1_048_576
 _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+_TERMINAL_CONTROL_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 class OnboardingCliError(Exception):
@@ -74,6 +77,11 @@ class TerminalRevealHandoff:
 
 def _safe_error() -> OnboardingCliError:
     return OnboardingCliError("azlimits_onboarding_error: unable to complete onboarding safely.")
+
+
+def _safe_terminal_text(value: str) -> str:
+    """Remove terminal control sequences from server- or user-controlled text."""
+    return _TERMINAL_CONTROL_RE.sub("", value)
 
 
 def _parse_origin(value: str) -> SplitResult:
@@ -179,6 +187,15 @@ class OnboardingApiClient:
 
         if response.is_redirect or not response.is_success:
             raise _safe_error()
+        content_length = response.headers.get("Content-Length")
+        if content_length is not None:
+            try:
+                if int(content_length) > _MAX_RESPONSE_BYTES:
+                    raise _safe_error()
+            except ValueError as error:
+                raise _safe_error() from error
+        if len(response.content) > _MAX_RESPONSE_BYTES:
+            raise _safe_error()
 
         try:
             return model.model_validate(response.json())
@@ -262,8 +279,8 @@ def run_onboarding(
         output(str(error))
         return False
 
-    output(f"EULA version: {eula.version}")
-    output(eula.content)
+    output(f"EULA version: {_safe_terminal_text(eula.version)}")
+    output(_safe_terminal_text(eula.content))
     if not _read_affirmative_confirmation(input_fn, output):
         output("Terms were not accepted; no token was created.")
         return False
@@ -310,7 +327,10 @@ def _print_completion(
 ) -> None:
     """Report safe host-setup guidance without rendering the raw API token."""
     expires_at: datetime = token.expires_at
-    output(f"Created API token '{token.name}' that expires at {expires_at.isoformat()}.")
+    output(
+        f"Created API token '{_safe_terminal_text(token.name)}' that expires at "
+        f"{expires_at.isoformat()}."
+    )
     output("Keep the raw token private after its one-time terminal display.")
     output(
         "Enter the one-time token directly into your MCP host's approved hidden secret "
@@ -365,7 +385,7 @@ def main(argv: list[str] | None = None) -> int:
         if run_onboarding(
             client,
             token_name=args.token_name,
-            reveal_handoff=TerminalRevealHandoff(sys.stdin, sys.stdout),
+            reveal_handoff=TerminalRevealHandoff(sys.stdin, sys.stderr),
         )
         else 1
     )

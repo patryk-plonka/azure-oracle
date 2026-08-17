@@ -316,15 +316,15 @@ No data migration, database change, API-route change, MCP-server change, or user
 
 #### Automated
 
-- [x] 3.1 CLI handoff and documentation-focused tests pass: `uv run pytest tests/test_onboarding_cli.py -v`
-- [x] 3.2 MCP regression tests pass: `uv run pytest tests/test_mcp_server.py -v`
-- [x] 3.3 Full regression suite passes: `uv run pytest tests/ -v`
-- [x] 3.4 Linting passes: `uv run ruff check .`
-- [x] 3.5 Type checking passes: `uv run mypy .`
+- [x] 3.1 CLI handoff and documentation-focused tests pass: `uv run pytest tests/test_onboarding_cli.py -v` — 48ba063
+- [x] 3.2 MCP regression tests pass: `uv run pytest tests/test_mcp_server.py -v` — 48ba063
+- [x] 3.3 Full regression suite passes: `uv run pytest tests/ -v` — 48ba063
+- [x] 3.4 Linting passes: `uv run ruff check .` — 48ba063
+- [x] 3.5 Type checking passes: `uv run mypy .` — 48ba063
 
 #### Manual
 
-- [x] 3.6 VS Code user-level secret configuration starts and calls credential-free MCP server
-- [x] 3.7 No token-bearing command, script, env file, or workspace configuration is created
-- [x] 3.8 Invalid MCP token yields stable secret-free authentication failure
-- [x] 3.9 Independently started parent shell/editor remains unconfigured after CLI completion
+- [x] 3.6 VS Code user-level secret configuration starts and calls credential-free MCP server — 48ba063
+- [x] 3.7 No token-bearing command, script, env file, or workspace configuration is created — 48ba063
+- [x] 3.8 Invalid MCP token yields stable secret-free authentication failure — 48ba063
+- [x] 3.9 Independently started parent shell/editor remains unconfigured after CLI completion — 48ba063

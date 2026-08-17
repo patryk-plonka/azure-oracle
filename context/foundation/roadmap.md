@@ -3,7 +3,7 @@ project: "AzLimits"
 version: 1
 status: draft
 created: 2026-07-20
-updated: 2026-08-15
+updated: 2026-08-17
 prd_version: 1
 main_goal: quality
 top_blocker: time
@@ -53,7 +53,7 @@ provenance, served through a protected endpoint).
 | F-04 | observability-logging-floor | (foundation) request/error logging middleware with secrets stripped | — | NFR (minimal logging floor), FR-013 | done |
 | S-01 | rest-search-query-core | user can query limitations via the REST search endpoint and receive source-backed records with a support-status verdict | F-01, F-02, F-03, F-04 | US-01, FR-008, FR-010, FR-016, FR-006 | done |
 | S-02 | developer-onboarding-token | user can log in with GitHub, accept EULA, get Demo license, generate/expire a token | F-03 | US-02, FR-001, FR-002, FR-003, FR-004, FR-005 | done |
-| S-03 | mcp-tool-wrapper | agent can query the same query core through an MCP tool | S-01 | US-01, FR-007 | planned |
+| S-03 | mcp-tool-wrapper | agent can query the same query core through an MCP tool | S-01 | US-01, FR-007 | done |
 
 ## Streams
 
@@ -170,7 +170,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Sequenced after S-01 (the north star) because the MCP wrapper is a thin surface over the already-validated query core — wrapping before the core is proven would couple two risks. Risk: if the MCP tool returns results without the token+license gate, the PRD §Access Control guardrail is violated — mitigated by reusing F-03's middleware.
-- **Status:** planned — active slice in `context/changes/mcp-tool-wrapper/`; do not mark done until implementation, verification, and review are complete.
+- **Status:** done
 
 ## Backlog Handoff
 
@@ -212,3 +212,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **S-02: user can log in with GitHub, accept EULA, get Demo license, generate/expire a token** — Archived 2026-08-15 → `context/archive/2026-08-06-developer-onboarding-token/`. Lesson: —.
 - **F-04: (foundation) request + error logging middleware with secrets stripped from logs and error bodies — the minimal logging floor the PRD NFR requires.** — Archived 2026-08-03 → `context/archive/2026-08-02-observability-logging-floor/`. Lesson: —.
 - **F-03: (foundation) GitHub OAuth callback, EULA acceptance record, Demo license assignment, API token generation (stored hash-only), and per-request token-validity + Demo-license-state validation middleware — the smallest auth contract that lets a protected endpoint proceed.** — Archived 2026-08-03 → `context/archive/2026-07-29-auth-scaffold-token-license/`. Lesson: —.
+- **S-03: agent can query the same query core through an MCP tool** — Archived 2026-08-17 → `context/archive/2026-08-16-mcp-tool-wrapper/`. Lesson: —.

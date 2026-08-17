@@ -36,20 +36,32 @@ class InteractiveStream(Protocol):
 
 
 class TerminalRevealHandoff:
-    """Reveal a new token once through verified interactive terminal streams."""
+    """Reveal a new token once through verified interactive terminal streams.
 
-    def __init__(self, confirmation_input: InteractiveStream, reveal_output: InteractiveStream) -> None:
+    The production CLI intentionally uses stdout for both ordinary guidance and
+    the reveal destination; no ordinary output is emitted during ``reveal``.
+    """
+
+    def __init__(
+        self,
+        confirmation_input: InteractiveStream,
+        reveal_output: InteractiveStream,
+        confirmation_fn: Callable[[str], str] = input,
+    ) -> None:
         self._confirmation_input = confirmation_input
         self._reveal_output = reveal_output
+        self._confirmation_fn = confirmation_fn
 
     def is_interactive(self) -> bool:
         """Require both the approval input and secret destination to be terminals."""
         return self._confirmation_input.isatty() and self._reveal_output.isatty()
 
-    def confirm(self, input_fn: Callable[[str], str]) -> bool:
+    def confirm(self) -> bool:
         """Collect the explicit consent required before irreversible issuance."""
         try:
-            response = input_fn("Reveal the new token once now? Type reveal to continue: ")
+            response = self._confirmation_fn(
+                "Reveal the new token once now? Type reveal to continue: "
+            )
         except (EOFError, KeyboardInterrupt):
             return False
         return response.strip().lower() == "reveal"
@@ -207,7 +219,6 @@ def _read_token_name(
 
 def _confirm_terminal_reveal(
     handoff: TerminalRevealHandoff,
-    input_fn: Callable[[str], str],
     output: Callable[[str], None],
 ) -> bool:
     """Validate the terminal boundary and separate consent before issuing a token."""
@@ -220,7 +231,7 @@ def _confirm_terminal_reveal(
         "recordings, remote sessions, or screen sharing may retain it. Enter it immediately "
         "into your MCP host's hidden secret prompt or store."
     )
-    if not handoff.confirm(input_fn):
+    if not handoff.confirm():
         output("Token reveal was not approved; no token was created.")
         return False
     return True
@@ -272,7 +283,7 @@ def run_onboarding(
     if reveal_handoff is None:
         output("Token creation requires an interactive terminal reveal; no token was created.")
         return False
-    if not _confirm_terminal_reveal(reveal_handoff, input_fn, output):
+    if not _confirm_terminal_reveal(reveal_handoff, output):
         return False
 
     try:

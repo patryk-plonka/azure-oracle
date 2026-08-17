@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 import httpx
@@ -49,7 +51,11 @@ def _interactive_handoff(
     *, reveal_stream: FakeTerminalStream | None = None
 ) -> tuple[TerminalRevealHandoff, FakeTerminalStream]:
     stream = reveal_stream or FakeTerminalStream()
-    return TerminalRevealHandoff(FakeTerminalStream(), stream), stream
+    return TerminalRevealHandoff(
+        FakeTerminalStream(),
+        stream,
+        confirmation_fn=lambda _: "reveal",
+    ), stream
 
 
 def test_validates_safe_api_origins() -> None:
@@ -110,6 +116,30 @@ def test_cli_help_has_no_secret_arguments(capsys) -> None:
     output = capsys.readouterr().out.lower()
     for forbidden in ("credential", "bearer", "oauth", "secret", "token-value"):
         assert forbidden not in output
+
+
+def test_main_wires_production_reveal_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    handoff, reveal_stream = _interactive_handoff()
+    client = OnboardingApiClient(API_URL)
+    calls: list[str] = []
+
+    monkeypatch.setattr("onboarding_cli.OnboardingApiClient", lambda _: client)
+    monkeypatch.setattr("onboarding_cli.webbrowser.open", lambda _: True)
+    monkeypatch.setattr("onboarding_cli.getpass.getpass", lambda _: ONBOARDING_CREDENTIAL)
+    monkeypatch.setattr("onboarding_cli.sys.stdin", handoff._confirmation_input)
+    monkeypatch.setattr("onboarding_cli.sys.stdout", reveal_stream)
+
+    def fake_run_onboarding(received_client: OnboardingApiClient, **kwargs: object) -> bool:
+        calls.append(type(kwargs["reveal_handoff"]).__name__)
+        return received_client is client
+
+    monkeypatch.setattr(
+        "onboarding_cli.run_onboarding",
+        fake_run_onboarding,
+    )
+
+    assert main(["--api-base-url", API_URL]) == 0
+    assert calls == ["TerminalRevealHandoff"]
 
 
 @respx.mock
@@ -351,12 +381,17 @@ def test_token_timeout_is_not_retried_and_requires_restart() -> None:
 
 
 @respx.mock
-def test_completion_guidance_is_secret_free_and_host_scoped() -> None:
+def test_completion_guidance_is_secret_free_and_host_scoped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     respx.get(f"{API_URL}/auth/eula").mock(return_value=_eula_response())
     respx.post(f"{API_URL}/auth/eula/accept").mock(return_value=_acceptance_response())
     respx.post(f"{API_URL}/auth/tokens").mock(return_value=_token_response())
     output: list[str] = []
     handoff, _ = _interactive_handoff()
+    monkeypatch.chdir(tmp_path)
+    environment_before = dict(os.environ)
+    argv_before = list(sys.argv)
 
     assert run_onboarding(
         OnboardingApiClient(API_URL),
@@ -368,6 +403,9 @@ def test_completion_guidance_is_secret_free_and_host_scoped() -> None:
         reveal_handoff=handoff,
     )
 
+    assert dict(os.environ) == environment_before
+    assert list(sys.argv) == argv_before
+    assert list(tmp_path.rglob("*")) == []
     rendered = "\n".join(output)
     assert "uv run python mcp_server.py" in rendered
     assert '"AZLIMITS_API_BASE_URL": "https://azlimits.example.test"' in rendered
@@ -390,13 +428,21 @@ def test_reveal_rejection_prevents_token_issuance(response: str | BaseException)
     token_route = respx.post(f"{API_URL}/auth/tokens").mock(return_value=_token_response())
     output: list[str] = []
     responses = iter(["yes", response])
-    handoff, reveal_stream = _interactive_handoff()
+    reveal_stream = FakeTerminalStream()
 
-    def input_fn(_: str) -> str:
+    def confirmation_fn(_: str) -> str:
         value = next(responses)
         if isinstance(value, BaseException):
             raise value
         return value
+
+    handoff = TerminalRevealHandoff(
+        FakeTerminalStream(), reveal_stream, confirmation_fn=confirmation_fn
+    )
+
+    def input_fn(_: str) -> str:
+        value = next(responses)
+        return value if isinstance(value, str) else "yes"
 
     assert not run_onboarding(
         OnboardingApiClient(API_URL),
@@ -494,3 +540,15 @@ def test_operating_guide_documents_one_time_tty_reveal() -> None:
 
     for forbidden in ("$env:AZLIMITS_API_TOKEN", "setx", "<retrieve-from-approved-secret-store>"):
         assert forbidden not in guide
+
+
+def test_reveal_is_not_sent_through_generic_output() -> None:
+    handoff, reveal_stream = _interactive_handoff()
+    generic_output: list[str] = []
+
+    assert handoff.is_interactive()
+    assert handoff.confirm()
+    handoff.reveal(RAW_TOKEN)
+
+    assert generic_output == []
+    assert reveal_stream.writes == [f"{RAW_TOKEN}\n"]

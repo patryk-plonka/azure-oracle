@@ -211,16 +211,16 @@ No database, API, schema, MCP-server, or deployment migration is required. Exist
 
 #### Automated
 
-- [x] 2.1 Full CLI reveal and documentation tests pass: `uv run pytest tests/test_onboarding_cli.py -v`
-- [x] 2.2 MCP regression tests pass: `uv run pytest tests/test_mcp_server.py -v`
-- [x] 2.3 Logging secret-regression tests pass: `uv run pytest tests/test_logging_middleware.py -v`
-- [x] 2.4 Full regression suite passes: `uv run pytest tests/ -v`
-- [x] 2.5 Linting passes: `uv run ruff check .`
-- [x] 2.6 Type checking passes: `uv run mypy .`
+- [x] 2.1 Full CLI reveal and documentation tests pass: `uv run pytest tests/test_onboarding_cli.py -v` — 4709e46
+- [x] 2.2 MCP regression tests pass: `uv run pytest tests/test_mcp_server.py -v` — 4709e46
+- [x] 2.3 Logging secret-regression tests pass: `uv run pytest tests/test_logging_middleware.py -v` — 4709e46
+- [x] 2.4 Full regression suite passes: `uv run pytest tests/ -v` — 4709e46
+- [x] 2.5 Linting passes: `uv run ruff check .` — 4709e46
+- [x] 2.6 Type checking passes: `uv run mypy .` — 4709e46
 
 #### Manual
 
-- [x] 2.7 VS Code user-level secret handoff starts credential-free MCP server
-- [x] 2.8 No token-bearing artifacts or parent-process configuration are created
-- [x] 2.9 Invalid MCP token yields stable secret-free authentication failure
-- [x] 2.10 Raw token appears only in the approved single reveal
+- [x] 2.7 VS Code user-level secret handoff starts credential-free MCP server — 4709e46
+- [x] 2.8 No token-bearing artifacts or parent-process configuration are created — 4709e46
+- [x] 2.9 Invalid MCP token yields stable secret-free authentication failure — 4709e46
+- [x] 2.10 Raw token appears only in the approved single reveal — 4709e46

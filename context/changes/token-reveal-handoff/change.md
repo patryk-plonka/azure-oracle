@@ -1,9 +1,9 @@
 ---
 change_id: token-reveal-handoff
 title: Token reveal handoff
-status: implementing
+status: implemented
 created: 2026-08-16
-updated: 2026-08-16
+updated: 2026-08-17
 archived_at: null
 ---
 

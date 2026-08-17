@@ -300,31 +300,31 @@ No data migration, database change, API-route change, MCP-server change, or user
 
 #### Automated
 
-- [x] 2.1 Full focused CLI workflow tests pass: `uv run pytest tests/test_onboarding_cli.py -v`
-- [x] 2.2 Existing onboarding and secret-logging tests pass: `uv run pytest tests/test_auth_oauth.py tests/test_onboarding.py tests/test_auth_token.py tests/test_logging_middleware.py -v`
-- [x] 2.3 Full regression suite passes: `uv run pytest tests/ -v`
-- [x] 2.4 Linting passes: `uv run ruff check .`
-- [x] 2.5 Type checking passes: `uv run mypy .`
+- [x] 2.1 Full focused CLI workflow tests pass: `uv run pytest tests/test_onboarding_cli.py -v` — b3cc97c
+- [x] 2.2 Existing onboarding and secret-logging tests pass: `uv run pytest tests/test_auth_oauth.py tests/test_onboarding.py tests/test_auth_token.py tests/test_logging_middleware.py -v` — b3cc97c
+- [x] 2.3 Full regression suite passes: `uv run pytest tests/ -v` — b3cc97c
+- [x] 2.4 Linting passes: `uv run ruff check .` — b3cc97c
+- [x] 2.5 Type checking passes: `uv run mypy .` — b3cc97c
 
 #### Manual
 
-- [x] 2.6 Browser consent followed by declined EULA causes no CLI-driven token/entitlement issuance
-- [x] 2.7 Accepted EULA creates a named token while CLI reveals only non-secret completion metadata
-- [x] 2.8 Interrupted state-changing request instructs restart rather than automatic retry
+- [x] 2.6 Browser consent followed by declined EULA causes no CLI-driven token/entitlement issuance — b3cc97c
+- [x] 2.7 Accepted EULA creates a named token while CLI reveals only non-secret completion metadata — b3cc97c
+- [x] 2.8 Interrupted state-changing request instructs restart rather than automatic retry — b3cc97c
 
 ### Phase 3: MCP-Host Handoff Documentation and Final Verification
 
 #### Automated
 
-- [ ] 3.1 CLI handoff and documentation-focused tests pass: `uv run pytest tests/test_onboarding_cli.py -v`
-- [ ] 3.2 MCP regression tests pass: `uv run pytest tests/test_mcp_server.py -v`
-- [ ] 3.3 Full regression suite passes: `uv run pytest tests/ -v`
-- [ ] 3.4 Linting passes: `uv run ruff check .`
-- [ ] 3.5 Type checking passes: `uv run mypy .`
+- [x] 3.1 CLI handoff and documentation-focused tests pass: `uv run pytest tests/test_onboarding_cli.py -v`
+- [x] 3.2 MCP regression tests pass: `uv run pytest tests/test_mcp_server.py -v`
+- [x] 3.3 Full regression suite passes: `uv run pytest tests/ -v`
+- [x] 3.4 Linting passes: `uv run ruff check .`
+- [x] 3.5 Type checking passes: `uv run mypy .`
 
 #### Manual
 
-- [ ] 3.6 VS Code user-level secret configuration starts and calls credential-free MCP server
-- [ ] 3.7 No token-bearing command, script, env file, or workspace configuration is created
-- [ ] 3.8 Invalid MCP token yields stable secret-free authentication failure
-- [ ] 3.9 Independently started parent shell/editor remains unconfigured after CLI completion
+- [x] 3.6 VS Code user-level secret configuration starts and calls credential-free MCP server
+- [x] 3.7 No token-bearing command, script, env file, or workspace configuration is created
+- [x] 3.8 Invalid MCP token yields stable secret-free authentication failure
+- [x] 3.9 Independently started parent shell/editor remains unconfigured after CLI completion

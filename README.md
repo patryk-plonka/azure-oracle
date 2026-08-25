@@ -19,15 +19,22 @@ does not run during application startup or deployment.
 
 Set `TEST_DATABASE_URL` to a disposable PostgreSQL database distinct from the
 operator or Railway database. The test fixture runs migrations and truncates only
-that test database between import cases.
+that test database between import cases. Synchronize the locked development
+environment before running the same checks as pull request CI.
 
 ```powershell
 $env:TEST_DATABASE_URL = "postgresql://..."
-uv run pytest tests/test_seed_import.py -v
-uv run pytest tests/ -v
+uv sync --locked --group dev
 uv run ruff check .
 uv run mypy .
+uv run pytest tests/ -v --cov --cov-branch --cov-report=term-missing
 ```
+
+Coverage measures application modules with line and branch coverage; tests,
+migrations, caches, and generated metadata are excluded in `pyproject.toml`.
+The `[tool.coverage.report] fail_under` value is the current whole-number
+baseline. Raise it as coverage improves. Lowering it requires an explicit,
+reviewed policy change rather than an incidental test or workflow edit.
 
 Railway receives only `DATABASE_URL`; do not configure `TEST_DATABASE_URL` as a
 Railway production variable.
@@ -170,7 +177,8 @@ Use a disposable PostgreSQL database for `TEST_DATABASE_URL`, distinct from
 
 ```powershell
 $env:TEST_DATABASE_URL = "postgresql://..."
-uv run pytest tests/ -v
+uv sync --locked --group dev
 uv run ruff check .
 uv run mypy .
+uv run pytest tests/ -v --cov --cov-branch --cov-report=term-missing
 ```

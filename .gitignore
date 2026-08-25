@@ -25,7 +25,17 @@ htmlcov/
 
 # Repository-local planning and configuration material
 .github/
+!.github/
+.github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/pr-quality.yml
+!.github/workflows/pr-ai-review.yml
+!.github/pr-ai-review-rubric.md
 concept/
+!concept/
+concept/*
+!concept/azure_limitations_db.csv
 concept.md
 
 # Editor and OS metadata

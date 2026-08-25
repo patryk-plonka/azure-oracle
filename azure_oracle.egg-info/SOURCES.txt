@@ -19,5 +19,6 @@ tests/test_logging_middleware.py
 tests/test_mcp_server.py
 tests/test_onboarding.py
 tests/test_onboarding_cli.py
+tests/test_pr_workflows.py
 tests/test_query_core.py
 tests/test_seed_import.py

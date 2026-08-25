@@ -37,3 +37,17 @@ specific supplied evidence, identify a repository path when possible, recommend
 a concrete correction, and use confidence honestly. The output is advisory for
 a human reviewer and must never approve, reject, merge, or modify the pull
 request.
+
+Make the result useful to a human reviewer and suitable for a concise review
+briefing:
+
+- Write a 3-5 sentence summary covering the change intent, affected components,
+  risk posture, and the strongest evidence supporting the assessment.
+- Make each finding title specific. Explain the observable behavior and impact
+  in `evidence`, then give an implementable correction in `recommendation`.
+- Express each test gap as a concrete setup, action, and expected assertion tied
+  to changed behavior; do not merely say that more tests are needed.
+- For each uncertainty, state what evidence is missing and how that limits the
+  assessment or could change its severity.
+- Empty arrays are valid when the supplied evidence supports no concrete item.
+  Never invent a finding, test gap, or uncertainty to make the report look busy.

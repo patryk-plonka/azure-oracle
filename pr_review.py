@@ -438,6 +438,14 @@ def render_review(
     requested_model: str,
 ) -> str:
     review = result.review
+    severity_counts = {
+        severity: sum(finding.severity == severity for finding in review.findings)
+        for severity in ("critical", "high", "medium", "low")
+    }
+    severity_summary = " / ".join(
+        f"{severity_counts[severity]} {severity}"
+        for severity in ("critical", "high", "medium", "low")
+    )
     lines = [
         MARKER,
         "## AzLimits AI PR review",
@@ -454,33 +462,67 @@ def render_review(
     ]
     if context.truncated or context.omitted_files or context.binary_files:
         lines.extend(["", "> Review input was incomplete; omissions are reflected above."])
+    lines.extend(
+        [
+            "",
+            "### Review snapshot",
+            "",
+            "| Signal | Result |",
+            "| --- | ---: |",
+            f"| Evidence-backed findings | {len(review.findings)} |",
+            f"| Severity mix | {_safe_markdown(severity_summary)} |",
+            f"| Test gaps | {len(review.test_gaps)} |",
+            f"| Explicit uncertainties | {len(review.uncertainties)} |",
+            f"| Textual files assessed | {context.reviewed_files} |",
+        ]
+    )
     lines.extend(["", "### Summary", "", _safe_markdown(review.summary)])
     lines.extend(["", "### Findings", ""])
     if review.findings:
-        for finding in review.findings:
+        for index, finding in enumerate(review.findings, start=1):
             location = _safe_markdown(finding.path)
             if finding.line is not None:
                 location += f":{finding.line}"
             lines.extend(
                 [
-                    (
-                        f"- **{finding.severity.upper()} — {_safe_markdown(finding.title)}** "
-                        f"(`{location}`, confidence: {finding.confidence})"
-                    ),
-                    f"  - Evidence: {_safe_markdown(finding.evidence)}",
-                    f"  - Recommendation: {_safe_markdown(finding.recommendation)}",
+                    f"#### {index}. {finding.severity.upper()} — {_safe_markdown(finding.title)}",
+                    "",
+                    f"- **Location:** `{location}`",
+                    f"- **Confidence:** {_safe_markdown(finding.confidence)}",
+                    f"- **Evidence:** {_safe_markdown(finding.evidence)}",
+                    f"- **Recommendation:** {_safe_markdown(finding.recommendation)}",
+                    "",
                 ]
             )
     else:
-        lines.append("No evidence-backed findings in the supplied context.")
+        reviewed_file_label = "file" if context.reviewed_files == 1 else "files"
+        lines.append(
+            "No evidence-backed findings were identified across "
+            f"{context.reviewed_files} reviewed textual {reviewed_file_label}. This means "
+            "the supplied "
+            "patch did not support a concrete defect; it is not an approval or a clean "
+            "bill of health."
+        )
     lines.extend(["", "### Test gaps", ""])
-    lines.extend(f"- {_safe_markdown(item)}" for item in review.test_gaps)
+    lines.extend(
+        f"{index}. {_safe_markdown(item)}"
+        for index, item in enumerate(review.test_gaps, start=1)
+    )
     if not review.test_gaps:
-        lines.append("None identified from the supplied context.")
+        lines.append(
+            "No concrete test gap was identified for the changed behavior visible in the "
+            "supplied context."
+        )
     lines.extend(["", "### Uncertainties", ""])
-    lines.extend(f"- {_safe_markdown(item)}" for item in review.uncertainties)
+    lines.extend(
+        f"{index}. {_safe_markdown(item)}"
+        for index, item in enumerate(review.uncertainties, start=1)
+    )
     if not review.uncertainties:
-        lines.append("None stated.")
+        lines.append(
+            "No specific uncertainty was reported by the model. Residual uncertainty "
+            "remains for behavior outside the supplied patch and any omitted or binary files."
+        )
     lines.extend(
         [
             "",

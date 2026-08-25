@@ -456,8 +456,14 @@ def test_rendering_is_deterministic_safe_complete_and_advisory(review_result: Re
     assert "auth\\.py" not in rendered
     assert "4 reviewed / 2 omitted / 1 binary" in rendered
     assert "Review input was incomplete" in rendered
-    assert "HIGH" in rendered and "confidence: high" in rendered
-    assert "Evidence:" in rendered and "Recommendation:" in rendered
+    assert "Review snapshot" in rendered
+    assert "| Evidence-backed findings | 1 |" in rendered
+    assert "| Severity mix | 0 critical / 1 high / 0 medium / 0 low |" in rendered
+    assert "| Test gaps | 1 |" in rendered
+    assert "| Explicit uncertainties | 1 |" in rendered
+    assert "HIGH" in rendered and "**Confidence:** high" in rendered
+    assert "**Evidence:**" in rendered and "**Recommendation:**" in rendered
+    assert "#### 1. HIGH" in rendered
     assert "Test gaps" in rendered and "Uncertainties" in rendered
     assert "Human review remains required" in rendered
     assert SENTINEL not in rendered
@@ -472,9 +478,14 @@ def test_rendering_empty_sections_and_safe_notices(review_result: ReviewResult) 
         "requested",
     )
 
-    assert "No evidence-backed findings" in rendered
-    assert "None identified" in rendered
-    assert "None stated" in rendered
+    assert (
+        "No evidence-backed findings were identified across 1 reviewed textual file"
+        in rendered
+    )
+    assert "not an approval or a clean bill of health" in rendered
+    assert "No concrete test gap was identified" in rendered
+    assert "Residual uncertainty remains" in rendered
+    assert "| Evidence-backed findings | 0 |" in rendered
     assert "incomplete" not in rendered.lower()
     assert "human review is required" in render_unavailable(HEAD_SHA).lower()
 
@@ -576,6 +587,9 @@ def test_rubric_is_repository_specific_and_treats_pr_content_as_data() -> None:
         "10 findings",
         "8 test gaps",
         "5 uncertainties",
+        "3-5 sentence summary",
+        "concrete setup, action, and expected assertion",
+        "Never invent a finding",
     ]
     assert all(item in rubric for item in expected)
     assert "request or reveal credentials" in rubric

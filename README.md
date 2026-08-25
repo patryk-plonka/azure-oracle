@@ -36,6 +36,40 @@ The `[tool.coverage.report] fail_under` value is the current whole-number
 baseline. Raise it as coverage improves. Lowering it requires an explicit,
 reviewed policy change rather than an incidental test or workflow edit.
 
+## AI PR Review Worker
+
+`pr_review.py` is a one-shot, advisory pull request review worker. GitHub
+Actions is its deployment target: a pull request event starts a fresh hosted
+runner, the trusted base-branch worker reads bounded PR metadata and patches
+through GitHub REST, calls OpenRouter REST, validates the structured result,
+and creates or updates one marked timeline comment. The runner is destroyed
+after the job. There is no OpenRouter or GitHub SDK, agent framework, GitHub
+App, container, webhook service, queue, database, or persistent bot to operate.
+
+The worker reviews at most 50 files and 64 KiB of UTF-8 input. It reports
+binary, omitted, and truncated content, caps structured findings and output,
+and treats all PR text and model output as untrusted data. Reviews are
+informational only; humans retain merge authority. Empty or entirely binary
+diffs receive an incomplete-review notice without a provider call. Provider,
+configuration, or validation failures produce only a safe unavailable notice
+when GitHub publication remains possible, and always require human review.
+
+The supported rollout scope is public, same-repository, non-draft pull
+requests. Private repositories, forks, and drafts are skipped by the workflow
+added in the publication phase. Provider privacy controls are defense in depth,
+not approval to send private code.
+
+Safe repository configuration consists of:
+
+- `OPENROUTER_MODEL`, an explicit structured-output-capable repository variable.
+- `OPENROUTER_API_KEY`, a dedicated GitHub Actions secret with a $5 monthly
+  limit and an appropriate model allowlist.
+
+Never record an example or real provider key. The worker also consumes the
+standard `GITHUB_EVENT_PATH`, `GITHUB_REPOSITORY`, `GITHUB_API_URL`, and the
+workflow-scoped `GITHUB_TOKEN`. Phase 2 tests all network effects with mocks;
+it does not grant a workflow access to either token.
+
 Railway receives only `DATABASE_URL`; do not configure `TEST_DATABASE_URL` as a
 Railway production variable.
 

@@ -704,12 +704,12 @@ reversible by workflow:
 
 #### Automated
 
-- [x] 1.1 Ignored-path contract passes
-- [x] 1.2 Locked dependencies install
-- [x] 1.3 Lint passes
-- [x] 1.4 Type checking passes
-- [x] 1.5 Full PostgreSQL suite passes with configured line/branch coverage and the recorded baseline
-- [x] 1.6 Clean-checkout simulation confirms only intended ignored assets are tracked
+- [x] 1.1 Ignored-path contract passes — 18ff786
+- [x] 1.2 Locked dependencies install — 18ff786
+- [x] 1.3 Lint passes — 18ff786
+- [x] 1.4 Type checking passes — 18ff786
+- [x] 1.5 Full PostgreSQL suite passes with configured line/branch coverage and the recorded baseline — 18ff786
+- [x] 1.6 Clean-checkout simulation confirms only intended ignored assets are tracked — 18ff786
 
 #### Manual
 
@@ -721,17 +721,17 @@ reversible by workflow:
 
 #### Automated
 
-- [ ] 2.1 Reviewer unit and HTTP-contract tests pass
-- [ ] 2.2 Complete suite remains green with the Phase 1 coverage floor
-- [ ] 2.3 Lint passes
-- [ ] 2.4 Type checking passes
-- [ ] 2.5 Sentinel-secret assertions pass across all captured surfaces
+- [x] 2.1 Reviewer unit and HTTP-contract tests pass
+- [x] 2.2 Complete suite remains green with the Phase 1 coverage floor
+- [x] 2.3 Lint passes
+- [x] 2.4 Type checking passes
+- [x] 2.5 Sentinel-secret assertions pass across all captured surfaces
 
 #### Manual
 
-- [ ] 2.6 Rendered fixtures are concise, evidence-backed, repository-specific, uncertain where appropriate, and advisory
-- [ ] 2.7 Mocked request evidence confirms model, schema, limits, no-tools, and privacy contracts
-- [ ] 2.8 Dedicated key has a $5 monthly cap and model allowlist without recording secrets
+- [x] 2.6 Rendered fixtures are concise, evidence-backed, repository-specific, uncertain where appropriate, and advisory
+- [x] 2.7 Mocked request evidence confirms model, schema, limits, no-tools, and privacy contracts
+- [x] 2.8 Dedicated key has a $5 monthly cap and model allowlist without recording secrets
 
 ### Phase 3: Advisory PR Publication
 

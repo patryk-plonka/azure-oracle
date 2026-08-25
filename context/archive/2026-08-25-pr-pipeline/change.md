@@ -1,10 +1,10 @@
 ---
 change_id: pr-pipeline
 title: Add pull request quality and AI review worker pipeline
-status: implemented
+status: archived
 created: 2026-08-25
 updated: 2026-08-25
-archived_at: null
+archived_at: 2026-08-25T20:47:57Z
 ---
 
 ## Notes

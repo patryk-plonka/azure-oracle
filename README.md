@@ -67,8 +67,54 @@ Safe repository configuration consists of:
 
 Never record an example or real provider key. The worker also consumes the
 standard `GITHUB_EVENT_PATH`, `GITHUB_REPOSITORY`, `GITHUB_API_URL`, and the
-workflow-scoped `GITHUB_TOKEN`. Phase 2 tests all network effects with mocks;
-it does not grant a workflow access to either token.
+workflow-scoped `GITHUB_TOKEN`.
+
+### Enabling the advisory workflow
+
+Merging `.github/workflows/pr-ai-review.yml` deploys the worker; GitHub creates
+and destroys an `ubuntu-24.04` runner for each eligible event. No separate
+service is deployed. Before enabling canaries:
+
+1. Confirm GitHub Actions is enabled for the repository. Keep the repository's
+   default `GITHUB_TOKEN` permission restricted; this workflow grants only
+   `contents: read` and `pull-requests: write`, which is sufficient for its
+   marked pull request timeline comment.
+2. Set the `OPENROUTER_MODEL` repository variable to an explicit model slug
+   that supports strict structured output and the configured provider policy.
+3. Add `OPENROUTER_API_KEY` as a dedicated Actions secret. Give the key only
+   the required model allowlist and a $5 monthly limit.
+4. Confirm the selected provider route supports required parameters, zero data
+   retention, and denied data collection.
+
+Keep only non-secret rollout evidence: configuration date, model slug, provider
+compatibility/privacy confirmation, canary PR and Actions run URLs, and the
+observed result. Never record the key, authorization headers, account details,
+or raw request/response bodies.
+
+The GitHub resource inventory is deliberately small: one unprivileged quality
+workflow, one trusted-base AI workflow, the built-in workflow-scoped
+`GITHUB_TOKEN`, one repository variable, one repository secret, the standard
+Actions event file and repository/API environment values, and one marked bot
+timeline comment. The AI workflow checks out only the event's base SHA with
+persisted credentials disabled. It does not execute PR-head code, application
+tests, PR dependency files, generated shell, or model-proposed commands.
+
+For rollout, use a public, same-repository, non-draft canary containing inert
+shell text, prompt-injection text, hostile Markdown/control characters, binary
+content, oversized text, and non-secret sentinel bait. Confirm the run reviews
+the exact head SHA, reports model and omission counts, leaks no sentinel, and
+updates the same marked comment on rerun. Exercise invalid-key, rate-limit,
+timeout, malformed-response, and unavailable-model paths; each must publish
+only a safe unavailable notice, fail the advisory check, and leave the quality
+workflow independent. Also verify private, fork, and draft pull requests skip
+the AI job while deterministic CI remains available.
+
+To roll back, disable or remove only `.github/workflows/pr-ai-review.yml`, or
+remove `OPENROUTER_API_KEY`. Provider calls and new comments then stop while
+`.github/workflows/pr-quality.yml` remains active. If branch protection is ever
+changed outside this rollout, remove any AI requirement separately; this
+workflow is advisory and must not be required by this change. A marked bot
+comment may be removed manually without editing human or unmarked comments.
 
 Railway receives only `DATABASE_URL`; do not configure `TEST_DATABASE_URL` as a
 Railway production variable.

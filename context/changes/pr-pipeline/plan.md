@@ -721,28 +721,28 @@ reversible by workflow:
 
 #### Automated
 
-- [x] 2.1 Reviewer unit and HTTP-contract tests pass
-- [x] 2.2 Complete suite remains green with the Phase 1 coverage floor
-- [x] 2.3 Lint passes
-- [x] 2.4 Type checking passes
-- [x] 2.5 Sentinel-secret assertions pass across all captured surfaces
+- [x] 2.1 Reviewer unit and HTTP-contract tests pass — 8ebe001
+- [x] 2.2 Complete suite remains green with the Phase 1 coverage floor — 8ebe001
+- [x] 2.3 Lint passes — 8ebe001
+- [x] 2.4 Type checking passes — 8ebe001
+- [x] 2.5 Sentinel-secret assertions pass across all captured surfaces — 8ebe001
 
 #### Manual
 
-- [x] 2.6 Rendered fixtures are concise, evidence-backed, repository-specific, uncertain where appropriate, and advisory
-- [x] 2.7 Mocked request evidence confirms model, schema, limits, no-tools, and privacy contracts
-- [x] 2.8 Dedicated key has a $5 monthly cap and model allowlist without recording secrets
+- [x] 2.6 Rendered fixtures are concise, evidence-backed, repository-specific, uncertain where appropriate, and advisory — 8ebe001
+- [x] 2.7 Mocked request evidence confirms model, schema, limits, no-tools, and privacy contracts — 8ebe001
+- [x] 2.8 Dedicated key has a $5 monthly cap and model allowlist without recording secrets — 8ebe001
 
 ### Phase 3: Advisory PR Publication
 
 #### Automated
 
-- [ ] 3.1 Workflow security-contract tests pass
-- [ ] 3.2 Reviewer tests pass
-- [ ] 3.3 Complete PostgreSQL suite and coverage floor pass
-- [ ] 3.4 Lint passes
-- [ ] 3.5 Type checking passes
-- [ ] 3.6 Intended workflows and rubric are trackable while unrelated ignored content remains ignored
+- [x] 3.1 Workflow security-contract tests pass
+- [x] 3.2 Reviewer tests pass
+- [x] 3.3 Complete PostgreSQL suite and coverage floor pass
+- [x] 3.4 Lint passes
+- [x] 3.5 Type checking passes
+- [x] 3.6 Intended workflows and rubric are trackable while unrelated ignored content remains ignored
 
 #### Manual
 

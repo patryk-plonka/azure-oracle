@@ -713,9 +713,9 @@ reversible by workflow:
 
 #### Manual
 
-- [ ] 1.7 Canary PR exposes understandable quality and coverage evidence
-- [ ] 1.8 Ruff, test, and coverage regressions each fail visibly and recover to green
-- [ ] 1.9 CI uses only a disposable test database and exposes no production/provider secret
+- [x] 1.7 Canary PR exposes understandable quality and coverage evidence
+- [x] 1.8 Ruff, test, and coverage regressions each fail visibly and recover to green
+- [x] 1.9 CI uses only a disposable test database and exposes no production/provider secret
 
 ### Phase 2: Bounded AI Reviewer Core
 
@@ -746,10 +746,10 @@ reversible by workflow:
 
 #### Manual
 
-- [ ] 3.7 Explicit model and capped key are configured with verified provider privacy and structured-output support
-- [ ] 3.8 Hostile-input canary proves no PR-head execution or sentinel leakage
-- [ ] 3.9 Marked comment reports exact SHA, model, omissions, findings, uncertainty, and advisory status
-- [ ] 3.10 Rerun updates one marked bot comment without touching other comments
-- [ ] 3.11 Provider failure canaries produce safe notices and leave deterministic CI independent
-- [ ] 3.12 Private, fork, and draft PRs skip AI while retaining deterministic CI
-- [ ] 3.13 AI rollback stops provider activity while deterministic CI remains active
+- [x] 3.7 Explicit model and capped key are configured with verified provider privacy and structured-output support
+- [x] 3.8 Hostile-input canary proves no PR-head execution or sentinel leakage
+- [x] 3.9 Marked comment reports exact SHA, model, omissions, findings, uncertainty, and advisory status
+- [x] 3.10 Rerun updates one marked bot comment without touching other comments
+- [x] 3.11 Provider failure canaries produce safe notices and leave deterministic CI independent
+- [x] 3.12 Private, fork, and draft PRs skip AI while retaining deterministic CI
+- [x] 3.13 AI rollback stops provider activity while deterministic CI remains active

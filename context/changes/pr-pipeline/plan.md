@@ -713,9 +713,9 @@ reversible by workflow:
 
 #### Manual
 
-- [x] 1.7 Canary PR exposes understandable quality and coverage evidence
-- [x] 1.8 Ruff, test, and coverage regressions each fail visibly and recover to green
-- [x] 1.9 CI uses only a disposable test database and exposes no production/provider secret
+- [x] 1.7 Canary PR exposes understandable quality and coverage evidence — a18d6b4
+- [x] 1.8 Ruff, test, and coverage regressions each fail visibly and recover to green — a18d6b4
+- [x] 1.9 CI uses only a disposable test database and exposes no production/provider secret — a18d6b4
 
 ### Phase 2: Bounded AI Reviewer Core
 
@@ -737,19 +737,19 @@ reversible by workflow:
 
 #### Automated
 
-- [x] 3.1 Workflow security-contract tests pass
-- [x] 3.2 Reviewer tests pass
-- [x] 3.3 Complete PostgreSQL suite and coverage floor pass
-- [x] 3.4 Lint passes
-- [x] 3.5 Type checking passes
-- [x] 3.6 Intended workflows and rubric are trackable while unrelated ignored content remains ignored
+- [x] 3.1 Workflow security-contract tests pass — eea5370
+- [x] 3.2 Reviewer tests pass — eea5370
+- [x] 3.3 Complete PostgreSQL suite and coverage floor pass — eea5370
+- [x] 3.4 Lint passes — eea5370
+- [x] 3.5 Type checking passes — eea5370
+- [x] 3.6 Intended workflows and rubric are trackable while unrelated ignored content remains ignored — eea5370
 
 #### Manual
 
-- [x] 3.7 Explicit model and capped key are configured with verified provider privacy and structured-output support
-- [x] 3.8 Hostile-input canary proves no PR-head execution or sentinel leakage
-- [x] 3.9 Marked comment reports exact SHA, model, omissions, findings, uncertainty, and advisory status
-- [x] 3.10 Rerun updates one marked bot comment without touching other comments
-- [x] 3.11 Provider failure canaries produce safe notices and leave deterministic CI independent
-- [x] 3.12 Private, fork, and draft PRs skip AI while retaining deterministic CI
-- [x] 3.13 AI rollback stops provider activity while deterministic CI remains active
+- [x] 3.7 Explicit model and capped key are configured with verified provider privacy and structured-output support — a18d6b4
+- [x] 3.8 Hostile-input canary proves no PR-head execution or sentinel leakage — a18d6b4
+- [x] 3.9 Marked comment reports exact SHA, model, omissions, findings, uncertainty, and advisory status — a18d6b4
+- [x] 3.10 Rerun updates one marked bot comment without touching other comments — a18d6b4
+- [x] 3.11 Provider failure canaries produce safe notices and leave deterministic CI independent — a18d6b4
+- [x] 3.12 Private, fork, and draft PRs skip AI while retaining deterministic CI — a18d6b4
+- [x] 3.13 AI rollback stops provider activity while deterministic CI remains active — a18d6b4

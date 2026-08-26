@@ -367,22 +367,22 @@ No database schema migration is introduced by this plan. Existing releases may e
 
 #### Manual
 
-- [x] 3.6 Production environment scope, targets, and secret boundary are verified
-- [x] 3.7 Railway native main autodeploy is disabled
-- [x] 3.8 Controlled verifier failures are bounded and secret-free
+- [x] 3.6 Production environment scope, targets, and secret boundary are verified — 50fe251
+- [x] 3.7 Railway native main autodeploy is disabled — 50fe251
+- [x] 3.8 Controlled verifier failures are bounded and secret-free — 50fe251
 
 ### Phase 4: Production Enablement and Handoff
 
 #### Automated
 
-- [x] 4.1 Active handoff documentation has no stale deployment contradictions
-- [x] 4.2 Final workflow, verifier, static, type, and PostgreSQL-backed checks pass
-- [x] 4.3 Change metadata and canonical Progress structure remain valid
+- [x] 4.1 Active handoff documentation has no stale deployment contradictions — 50fe251
+- [x] 4.2 Final workflow, verifier, static, type, and PostgreSQL-backed checks pass — 50fe251
+- [x] 4.3 Change metadata and canonical Progress structure remain valid — 50fe251
 
 #### Manual
 
-- [x] 4.4 First canary records a complete matching exact-SHA release chain
-- [x] 4.5 Second canary proves serialized one-deployment-per-push behavior
-- [x] 4.6 Controlled failure is visible, safe, and does not auto-rollback
-- [x] 4.7 Human rollback drill restores liveness with migration caveat recorded
-- [x] 4.8 Canary, failure, and rollback logs contain no secrets
+- [x] 4.4 First canary records a complete matching exact-SHA release chain — 50fe251
+- [x] 4.5 Second canary proves serialized one-deployment-per-push behavior — 50fe251
+- [x] 4.6 Controlled failure is visible, safe, and does not auto-rollback — 50fe251
+- [x] 4.7 Human rollback drill restores liveness with migration caveat recorded — 50fe251
+- [x] 4.8 Canary, failure, and rollback logs contain no secrets — 50fe251

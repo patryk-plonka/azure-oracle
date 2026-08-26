@@ -1,7 +1,7 @@
 ---
 change_id: deploy-pipeline
 title: Automate Railway deployment after main updates
-status: implementing
+status: implemented
 created: 2026-08-25
 updated: 2026-08-26
 archived_at: null

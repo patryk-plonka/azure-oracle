@@ -346,24 +346,24 @@ No database schema migration is introduced by this plan. Existing releases may e
 
 #### Automated
 
-- [x] 2.1 Reusable workflow contract tests pass
-- [x] 2.2 Workflow YAML exposes the approved PR and reusable events
-- [x] 2.3 Repository static and type checks pass
-- [x] 2.4 Full PostgreSQL-backed suite and coverage pass
+- [x] 2.1 Reusable workflow contract tests pass — 0599065
+- [x] 2.2 Workflow YAML exposes the approved PR and reusable events — 0599065
+- [x] 2.3 Repository static and type checks pass — 0599065
+- [x] 2.4 Full PostgreSQL-backed suite and coverage pass — 0599065
 
 #### Manual
 
-- [x] 2.5 PR synchronize event produces fresh canonical checks
+- [x] 2.5 PR synchronize event produces fresh canonical checks — 0599065
 
 ### Phase 3: Serialized Railway Release Pipeline
 
 #### Automated
 
-- [ ] 3.1 Release verifier tests pass
-- [ ] 3.2 Production workflow contract tests pass
-- [ ] 3.3 Production workflow is trackable
-- [ ] 3.4 Repository static and type checks pass
-- [ ] 3.5 Full PostgreSQL-backed suite and coverage pass
+- [x] 3.1 Release verifier tests pass
+- [x] 3.2 Production workflow contract tests pass
+- [x] 3.3 Production workflow is trackable
+- [x] 3.4 Repository static and type checks pass
+- [x] 3.5 Full PostgreSQL-backed suite and coverage pass
 
 #### Manual
 

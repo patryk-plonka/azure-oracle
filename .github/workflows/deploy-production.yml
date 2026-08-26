@@ -1,0 +1,93 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: railway-production
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    uses: ./.github/workflows/pr-quality.yml
+
+  deploy:
+    name: Deploy and verify Railway production
+    needs: quality
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          version: "0.12.1"
+      - run: uv python install 3.12
+      - run: uv sync --locked
+      - name: Generate release metadata
+        env:
+          EXPECTED_GIT_SHA: ${{ github.sha }}
+        run: >-
+          uv run python -c "import json, os, pathlib;
+          pathlib.Path('release.json').write_text(
+          json.dumps({'git_sha': os.environ['EXPECTED_GIT_SHA']}) + '\n',
+          encoding='utf-8')"
+      - name: Install pinned Railway CLI
+        run: |
+          npm install --global @railway/cli@5.30.1
+          test "$(railway --version)" = "railway 5.30.1"
+      - name: Deploy exact source to Railway
+        continue-on-error: true
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+          EXPECTED_GIT_SHA: ${{ github.sha }}
+        run: >-
+          railway up --json
+          --project "$RAILWAY_PROJECT_ID"
+          --environment "$RAILWAY_ENVIRONMENT_ID"
+          --service "$RAILWAY_SERVICE_ID"
+          --message "$EXPECTED_GIT_SHA"
+          > railway-up.jsonl
+      - name: Correlate Railway deployment status
+        if: always()
+        continue-on-error: true
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+        run: >-
+          railway deployment list --json --limit 20
+          --project "$RAILWAY_PROJECT_ID"
+          --environment "$RAILWAY_ENVIRONMENT_ID"
+          --service "$RAILWAY_SERVICE_ID"
+          > railway-deployments.json
+      - name: Verify runtime SHA and health
+        if: always()
+        env:
+          EXPECTED_GIT_SHA: ${{ github.sha }}
+          APPLICATION_URL: ${{ vars.APPLICATION_URL }}
+        run: >-
+          uv run python verify_release.py
+          --expected-sha "$EXPECTED_GIT_SHA"
+          --base-url "$APPLICATION_URL"
+          --up-result railway-up.jsonl
+          --deployment-list railway-deployments.json
+          --output release-evidence.json
+      - name: Retain normalized release evidence
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: production-release-evidence-${{ github.sha }}
+          path: release-evidence.json
+          if-no-files-found: error
+          retention-days: 30

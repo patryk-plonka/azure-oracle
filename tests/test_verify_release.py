@@ -48,7 +48,7 @@ def _write_inputs(
                 "id": DEPLOYMENT_ID,
                 "status": "SUCCESS",
                 "createdAt": "2026-08-26T10:00:00Z",
-                "meta": {"message": FULL_SHA, "build": "safe ignored metadata"},
+                "meta": {"cliMessage": FULL_SHA, "build": "safe ignored metadata"},
             }
         ]
     list_path.write_text(json.dumps(deployments), encoding="utf-8")
@@ -256,13 +256,13 @@ def test_non_https_or_credential_bearing_base_url_is_rejected(
                     "id": DEPLOYMENT_ID,
                     "status": "SUCCESS",
                     "createdAt": "2026-08-26T10:00:00Z",
-                    "meta": {"message": FULL_SHA},
+                    "meta": {"cliMessage": FULL_SHA},
                 },
                 {
                     "id": "a1b2c3d4-e5f6-4890-abcd-ef1234567890",
                     "status": "SUCCESS",
                     "createdAt": "2026-08-26T10:01:00Z",
-                    "meta": {"message": FULL_SHA},
+                    "meta": {"cliMessage": FULL_SHA},
                 },
             ],
             "railway_deployment_ambiguous",
@@ -273,7 +273,7 @@ def test_non_https_or_credential_bearing_base_url_is_rejected(
                     "id": DEPLOYMENT_ID,
                     "status": "FAILED",
                     "createdAt": "2026-08-26T10:00:00Z",
-                    "meta": {"message": FULL_SHA},
+                    "meta": {"cliMessage": FULL_SHA},
                 }
             ],
             "railway_deployment_failed",
@@ -291,6 +291,26 @@ def test_missing_ambiguous_or_failed_deployment_is_rejected(
         )
 
     assert error.value.code == expected_code
+
+
+def test_correlation_uses_railway_cli_message_field(tmp_path: Path) -> None:
+    deployments = [
+        {
+            "id": DEPLOYMENT_ID,
+            "status": "SUCCESS",
+            "createdAt": "2026-08-26T10:00:00Z",
+            "meta": {"message": FULL_SHA},
+        }
+    ]
+
+    with pytest.raises(VerificationError) as error:
+        _run(
+            tmp_path,
+            lambda request: httpx.Response(500),
+            deployments=deployments,
+        )
+
+    assert error.value.code == "railway_deployment_ambiguous"
 
 
 @pytest.mark.parametrize("terminal_status", ["failed", "crashed"])
@@ -316,7 +336,7 @@ def test_evidence_excludes_raw_metadata_responses_and_secret_like_fields(
             "id": DEPLOYMENT_ID,
             "status": "SUCCESS",
             "createdAt": "2026-08-26T10:00:00Z",
-            "meta": {"message": FULL_SHA, "authorization": secret},
+            "meta": {"cliMessage": FULL_SHA, "authorization": secret},
             "rawLogs": secret,
         }
     ]

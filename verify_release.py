@@ -119,7 +119,7 @@ def _deployment_for_sha(path: Path, expected_sha: str) -> dict[str, str]:
         if not isinstance(item, dict):
             continue
         meta = item.get("meta")
-        if isinstance(meta, dict) and meta.get("message") == expected_sha:
+        if isinstance(meta, dict) and meta.get("cliMessage") == expected_sha:
             matching.append(item)
 
     if len(matching) != 1:

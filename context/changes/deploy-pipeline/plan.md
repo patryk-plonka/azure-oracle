@@ -359,30 +359,30 @@ No database schema migration is introduced by this plan. Existing releases may e
 
 #### Automated
 
-- [x] 3.1 Release verifier tests pass
-- [x] 3.2 Production workflow contract tests pass
-- [x] 3.3 Production workflow is trackable
-- [x] 3.4 Repository static and type checks pass
-- [x] 3.5 Full PostgreSQL-backed suite and coverage pass
+- [x] 3.1 Release verifier tests pass — ad9b365
+- [x] 3.2 Production workflow contract tests pass — ad9b365
+- [x] 3.3 Production workflow is trackable — ad9b365
+- [x] 3.4 Repository static and type checks pass — ad9b365
+- [x] 3.5 Full PostgreSQL-backed suite and coverage pass — ad9b365
 
 #### Manual
 
-- [ ] 3.6 Production environment scope, targets, and secret boundary are verified
-- [ ] 3.7 Railway native main autodeploy is disabled
-- [ ] 3.8 Controlled verifier failures are bounded and secret-free
+- [x] 3.6 Production environment scope, targets, and secret boundary are verified — 50fe251
+- [x] 3.7 Railway native main autodeploy is disabled — 50fe251
+- [x] 3.8 Controlled verifier failures are bounded and secret-free — 50fe251
 
 ### Phase 4: Production Enablement and Handoff
 
 #### Automated
 
-- [ ] 4.1 Active handoff documentation has no stale deployment contradictions
-- [ ] 4.2 Final workflow, verifier, static, type, and PostgreSQL-backed checks pass
-- [ ] 4.3 Change metadata and canonical Progress structure remain valid
+- [x] 4.1 Active handoff documentation has no stale deployment contradictions — 50fe251
+- [x] 4.2 Final workflow, verifier, static, type, and PostgreSQL-backed checks pass — 50fe251
+- [x] 4.3 Change metadata and canonical Progress structure remain valid — 50fe251
 
 #### Manual
 
-- [ ] 4.4 First canary records a complete matching exact-SHA release chain
-- [ ] 4.5 Second canary proves serialized one-deployment-per-push behavior
-- [ ] 4.6 Controlled failure is visible, safe, and does not auto-rollback
-- [ ] 4.7 Human rollback drill restores liveness with migration caveat recorded
-- [ ] 4.8 Canary, failure, and rollback logs contain no secrets
+- [x] 4.4 First canary records a complete matching exact-SHA release chain — 50fe251
+- [x] 4.5 Second canary proves serialized one-deployment-per-push behavior — 50fe251
+- [x] 4.6 Controlled failure is visible, safe, and does not auto-rollback — 50fe251
+- [x] 4.7 Human rollback drill restores liveness with migration caveat recorded — 50fe251
+- [x] 4.8 Canary, failure, and rollback logs contain no secrets — 50fe251

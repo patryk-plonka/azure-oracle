@@ -47,7 +47,7 @@ provenance, served through a protected endpoint).
 
 | ID | Change ID | Outcome (user can …) | Prerequisites | PRD refs | Status |
 |---|---|---|---|---|---|
-| F-01 | deploy-skeleton-health | (foundation) deployable FastAPI app + `/health` + readiness + Railway config | — | FR-013, NFR (HTTPS) | done |
+| F-01 | deploy-skeleton-health | (foundation) deployable FastAPI app + `/health` liveness + Railway config | — | FR-013, NFR (HTTPS) | done |
 | F-02 | postgres-schema-seed | (foundation) external Neon Postgres wired, limitations schema, curated CSV import (≥93 verified records) | — | FR-011, FR-012 | done |
 | F-03 | auth-scaffold-token-license | (foundation) GitHub OAuth + EULA + Demo license + token hashing + per-request token+license validation middleware | — | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006 | done |
 | F-04 | observability-logging-floor | (foundation) request/error logging middleware with secrets stripped | — | NFR (minimal logging floor), FR-013 | done |
@@ -65,25 +65,32 @@ Navigation aid — groups items that share a Prerequisites chain. Canonical orde
 | B | Data seed | `F-02` | Joins Stream A at `S-01` — the query core needs seeded data to return. |
 | C | Auth & onboarding | `F-03` → `S-02` | Joins Stream A at `S-01` via `F-03` (the protected endpoint's token+license gate); `S-02` runs parallel with `S-01`. |
 
-## Baseline
+## Historical Baseline
 
-What's already in place in the codebase as of 2026-07-20 (auto-researched + user-confirmed).
+What was already in place as of 2026-07-20 (auto-researched + user-confirmed).
 Foundations below assume these are present and do NOT re-scaffold them.
 
 - **Frontend:** absent — no UI layer (PRD §Non-Goals: "No full web dashboard / UI — API + MCP only for v1")
-- **Backend / API:** partial — FastAPI + uvicorn in `pyproject.toml`; `main.py` is hello-world stub, no `app` object, no routes (per `tech-stack.md`: FastAPI + uvicorn + uv declared)
-- **Data:** absent — no DB driver, ORM, migration tooling, or seeded data wired
-- **Auth:** absent — no OAuth, token, or license code paths
-- **Deploy / infra:** partial — `.python-version` pinned to 3.12, `uv.lock` committed; no Dockerfile/railway.json/.github/workflows (per `infrastructure.md` + `deploy-plan.md`: Railway + external Neon Postgres declared, manual `railway up` path documented as follow-up)
-- **Observability:** absent — no logging middleware, error tracking, or metrics
+- **Backend / API:** partial — only the FastAPI and Uvicorn stack had been selected.
+- **Data:** absent — database, migrations, and seed import had not landed.
+- **Auth:** absent — OAuth, token, and license paths had not landed.
+- **Deploy / infra:** partial — runtime/dependency pins existed, while Railway
+  runtime configuration and repository-owned automation had not landed.
+- **Observability:** absent — the logging middleware had not landed.
+
+Current handoff (2026-08-26): the API, PostgreSQL seed/query path, auth/license
+gate, onboarding, MCP wrapper, secret-stripped logging, deterministic PR quality
+workflow, runtime `/version`, and serialized Railway release workflow are
+implemented. `/health` remains liveness-only; dependency-aware readiness is
+still pending under the test-plan rollout.
 
 ## Foundations
 
-### F-01: Deploy skeleton + health/readiness
+### F-01: Deploy skeleton + health
 
-- **Outcome:** (foundation) a deployable FastAPI `app` object exists at `main:app`, `/health` and readiness endpoints respond, Railway config (start command, health-check host in allowed hosts) is in place — the smallest skeleton that can be deployed and verified.
+- **Outcome:** (foundation) a deployable FastAPI `app` object exists at `main:app`, `/health` reports process liveness, and Railway config (start command and health-check path) is in place — the smallest skeleton that can be deployed and verified. Dependency-aware readiness remains pending.
 - **Change ID:** deploy-skeleton-health
-- **PRD refs:** FR-013 (health + readiness endpoints), NFR (HTTPS-only), `deploy-plan.md` §1 Entry Gates
+- **PRD refs:** FR-013 (health/readiness requirement; readiness still pending), NFR (HTTPS-only), `deploy-plan.md` §1
 - **Unlocks:** S-01 (the REST query endpoint needs a deployed app to be exercised end-to-end); provides the verification path (`/health`) that Railway's health check gates on.
 - **Prerequisites:** —
 - **Parallel with:** F-02, F-03, F-04 (no inter-foundation dependencies)
@@ -201,13 +208,20 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **v2: LLM-assisted extraction** — Why parked: `shape-notes.md` §Forward: v2 — curated seed data needs no extraction.
 - **v2: rich REST query surface (sorting, grouping, multi-facet filtering, severity)** — Why parked: `shape-notes.md` §Forward: v2 — v1 ships one query core + one REST endpoint.
 - **v2: optional surfaces (web UI, CLI, GitHub Action, VS Code / Copilot integration, JSONL export)** — Why parked: `shape-notes.md` §Forward: v2 — v1 is API + MCP only.
-- **CI/CD: GitHub Actions auto-deploy-on-merge** — Why parked: `deploy-plan.md` §Decisions — manual `railway up` for the first deploy; CI auto-deploy is a documented follow-up, not a v1 slice.
 
 ## Done
 
+- **CI/CD: GitHub Actions-controlled Railway release pipeline** — Implemented
+  2026-08-26 in `context/changes/deploy-pipeline/`: every `main` push reuses
+  canonical exact-SHA quality checks, deploys serially with pinned Railway CLI,
+  verifies `/version` then `/health`, and retains normalized evidence. Railway
+  native branch autodeploy is an alternative control plane and must remain
+  disabled under this design. Hosted canary and rollback evidence are completed
+  at production enablement.
+
 - **S-01: user can query limitations via the REST search endpoint and receive source-backed records with a support-status verdict.** — Completed 2026-08-05 → `context/changes/rest-search-query-core/`.
 - **S-01: user can query limitations via the REST search endpoint and receive source-backed records with a support-status verdict.** — Archived 2026-08-06 → `context/archive/2026-08-03-rest-search-query-core/`. Lesson: —.
-- **F-01: (foundation) a deployable FastAPI `app` object exists at `main:app`, `/health` and readiness endpoints respond, Railway config (start command, health-check host in allowed hosts) is in place — the smallest skeleton that can be deployed and verified.** — Archived 2026-07-29 → `context/archive/2026-07-20-deploy-skeleton-health/`. Lesson: —.
+- **F-01: (foundation) a deployable FastAPI `app` object exists at `main:app`, `/health` reports process liveness, and Railway config is in place. Dependency-aware readiness remains pending.** — Archived 2026-07-29 → `context/archive/2026-07-20-deploy-skeleton-health/`. Lesson: —.
 - **F-02: (foundation) external Neon Postgres wired, limitations schema, curated CSV import (≥93 verified records) — the minimum data contract the query core can retrieve from.** — Archived 2026-07-29 → `context/archive/2026-07-29-postgres-schema-seed/`. Lesson: —.
 - **S-02: user can log in with GitHub, accept EULA, get Demo license, generate/expire a token** — Archived 2026-08-15 → `context/archive/2026-08-06-developer-onboarding-token/`. Lesson: —.
 - **F-04: (foundation) request + error logging middleware with secrets stripped from logs and error bodies — the minimal logging floor the PRD NFR requires.** — Archived 2026-08-03 → `context/archive/2026-08-02-observability-logging-floor/`. Lesson: —.

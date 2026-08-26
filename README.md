@@ -36,6 +36,51 @@ The `[tool.coverage.report] fail_under` value is the current whole-number
 baseline. Raise it as coverage improves. Lowering it requires an explicit,
 reviewed policy change rather than an incidental test or workflow edit.
 
+## Production Releases
+
+Every push to `main` runs the canonical Ruff, mypy, and PostgreSQL-backed
+coverage workflow for the triggering full Git SHA. After those checks pass,
+`.github/workflows/deploy-production.yml` creates one serialized,
+non-canceling Railway production deployment, verifies its exact runtime SHA,
+and checks process liveness.
+
+`GET /version` is public and returns only `{"git_sha": "<value>"}` with
+`Cache-Control: no-store`. A normal local checkout has no generated
+`release.json`, so it reports `unknown`. The deployment workflow generates
+`release.json` with the triggering full SHA inside the Railway upload context;
+hosted verification rejects `unknown`, abbreviated, malformed, or mismatched
+values.
+
+`GET /health` remains a static liveness endpoint. HTTP 200 proves the process is
+serving requests; it does not prove PostgreSQL readiness. Dependency-aware
+readiness remains a separate pending obligation.
+
+The GitHub Environment must be named `production`. Configure these non-secret
+variables without documenting their values:
+
+- `RAILWAY_PROJECT_ID`
+- `RAILWAY_ENVIRONMENT_ID`
+- `RAILWAY_SERVICE_ID`
+- `APPLICATION_URL` (credential-free HTTPS origin)
+
+Configure only the project/environment-scoped `RAILWAY_TOKEN` as the deployment
+secret. Application runtime secrets—including `DATABASE_URL`, GitHub OAuth
+credentials, and `TOKEN_HASH_SALT`—remain in Railway. Railway native GitHub
+autodeploy for `main` must remain disabled so one push has one deployment
+control plane.
+
+Each run writes a safe summary and retains `release-evidence.json` for 30 days.
+Evidence contains the source SHA, GitHub run ID, Railway deployment ID/status,
+observed runtime SHA, health result, attempts, and UTC timestamps. It excludes
+raw Railway logs, response bodies, credentials, authorization headers, and
+provider metadata.
+
+Failed deployment or verification does not roll back automatically because
+startup may already have applied a forward-only Alembic migration. Follow the
+human rollback procedure in `context/deployment/deploy-plan.md`: assess schema
+compatibility, roll back to a prior Railway deployment, then verify `/version`
+and `/health` and record non-secret evidence.
+
 ## AI PR Review Worker
 
 `pr_review.py` is a one-shot, advisory pull request review worker. GitHub

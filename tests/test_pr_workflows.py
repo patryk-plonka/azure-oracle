@@ -48,7 +48,10 @@ def test_quality_workflow_event_permissions_and_runner() -> None:
     workflow = _workflow()
 
     assert workflow["on"] == {
-        "pull_request": {"types": ["opened", "ready_for_review"]}
+        "pull_request": {
+            "types": ["opened", "synchronize", "ready_for_review"]
+        },
+        "workflow_call": {},
     }
     assert workflow["permissions"] == {"contents": "read"}
     assert set(workflow["jobs"]) == {"lint", "typecheck", "tests"}
@@ -60,6 +63,11 @@ def test_quality_workflow_uses_immutable_actions_and_locked_python() -> None:
 
     for job in workflow["jobs"].values():
         assert _uses(job) == [CHECKOUT_REF, SETUP_UV_REF]
+        checkout = _steps(job)[0]
+        assert checkout["with"] == {
+            "ref": "${{ github.sha }}",
+            "persist-credentials": False,
+        }
         setup_uv = _steps(job)[1]
         assert setup_uv["with"] == {"version": "0.12.1"}
         assert "uv python install 3.12" in _runs(job)
@@ -89,6 +97,7 @@ def test_quality_workflow_uses_isolated_postgresql_without_provider_secrets() ->
     workflow_text = QUALITY_WORKFLOW.read_text(encoding="utf-8")
     assert "DATABASE_URL:" not in workflow_text.replace("TEST_DATABASE_URL:", "")
     assert "OPENROUTER" not in workflow_text
+    assert "RAILWAY" not in workflow_text
     assert "secrets." not in workflow_text
     assert "pull_request_target" not in workflow_text
 

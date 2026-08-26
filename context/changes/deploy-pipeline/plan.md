@@ -332,28 +332,28 @@ No database schema migration is introduced by this plan. Existing releases may e
 
 #### Automated
 
-- [x] 1.1 Release identity and liveness tests pass
-- [x] 1.2 Release identity static checks pass
-- [x] 1.3 Release identity type checks pass
-- [x] 1.4 Full PostgreSQL-backed suite and coverage pass
+- [x] 1.1 Release identity and liveness tests pass — 71e8ba0
+- [x] 1.2 Release identity static checks pass — 71e8ba0
+- [x] 1.3 Release identity type checks pass — 71e8ba0
+- [x] 1.4 Full PostgreSQL-backed suite and coverage pass — 71e8ba0
 
 #### Manual
 
-- [x] 1.5 Local checkout reports `unknown` while preserving `/health`
-- [x] 1.6 Valid generated metadata reports the exact full SHA without extra metadata
+- [x] 1.5 Local checkout reports `unknown` while preserving `/health` — 71e8ba0
+- [x] 1.6 Valid generated metadata reports the exact full SHA without extra metadata — 71e8ba0
 
 ### Phase 2: Reusable Exact-SHA Quality Gate
 
 #### Automated
 
-- [ ] 2.1 Reusable workflow contract tests pass
-- [ ] 2.2 Workflow YAML exposes the approved PR and reusable events
-- [ ] 2.3 Repository static and type checks pass
-- [ ] 2.4 Full PostgreSQL-backed suite and coverage pass
+- [x] 2.1 Reusable workflow contract tests pass
+- [x] 2.2 Workflow YAML exposes the approved PR and reusable events
+- [x] 2.3 Repository static and type checks pass
+- [x] 2.4 Full PostgreSQL-backed suite and coverage pass
 
 #### Manual
 
-- [ ] 2.5 PR synchronize event produces fresh canonical checks
+- [x] 2.5 PR synchronize event produces fresh canonical checks
 
 ### Phase 3: Serialized Railway Release Pipeline
 

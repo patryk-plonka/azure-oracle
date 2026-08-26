@@ -8,8 +8,12 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 QUALITY_WORKFLOW = ROOT / ".github" / "workflows" / "pr-quality.yml"
 AI_WORKFLOW = ROOT / ".github" / "workflows" / "pr-ai-review.yml"
+DEPLOY_WORKFLOW = ROOT / ".github" / "workflows" / "deploy-production.yml"
 CHECKOUT_REF = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_UV_REF = "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9"
+UPLOAD_ARTIFACT_REF = (
+    "actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08"
+)
 
 
 def _workflow(path: Path = QUALITY_WORKFLOW) -> dict[str, Any]:
@@ -48,7 +52,10 @@ def test_quality_workflow_event_permissions_and_runner() -> None:
     workflow = _workflow()
 
     assert workflow["on"] == {
-        "pull_request": {"types": ["opened", "ready_for_review"]}
+        "pull_request": {
+            "types": ["opened", "synchronize", "ready_for_review"]
+        },
+        "workflow_call": {},
     }
     assert workflow["permissions"] == {"contents": "read"}
     assert set(workflow["jobs"]) == {"lint", "typecheck", "tests"}
@@ -60,6 +67,11 @@ def test_quality_workflow_uses_immutable_actions_and_locked_python() -> None:
 
     for job in workflow["jobs"].values():
         assert _uses(job) == [CHECKOUT_REF, SETUP_UV_REF]
+        checkout = _steps(job)[0]
+        assert checkout["with"] == {
+            "ref": "${{ github.sha }}",
+            "persist-credentials": False,
+        }
         setup_uv = _steps(job)[1]
         assert setup_uv["with"] == {"version": "0.12.1"}
         assert "uv python install 3.12" in _runs(job)
@@ -89,6 +101,7 @@ def test_quality_workflow_uses_isolated_postgresql_without_provider_secrets() ->
     workflow_text = QUALITY_WORKFLOW.read_text(encoding="utf-8")
     assert "DATABASE_URL:" not in workflow_text.replace("TEST_DATABASE_URL:", "")
     assert "OPENROUTER" not in workflow_text
+    assert "RAILWAY" not in workflow_text
     assert "secrets." not in workflow_text
     assert "pull_request_target" not in workflow_text
 
@@ -97,6 +110,7 @@ def test_only_required_github_and_concept_assets_are_trackable() -> None:
     trackable = [
         ".github/workflows/pr-quality.yml",
         ".github/workflows/pr-ai-review.yml",
+        ".github/workflows/deploy-production.yml",
         ".github/pr-ai-review-rubric.md",
         "concept/azure_limitations_db.csv",
     ]
@@ -218,4 +232,123 @@ def test_quality_and_ai_workflows_keep_separate_trust_profiles() -> None:
     assert ai_workflow["permissions"] == {
         "contents": "read",
         "pull-requests": "write",
+    }
+
+
+def test_deploy_workflow_has_exact_trigger_permissions_and_serialization() -> None:
+    workflow = _workflow(DEPLOY_WORKFLOW)
+
+    assert workflow["on"] == {"push": {"branches": ["main"]}}
+    assert workflow["permissions"] == {"contents": "read"}
+    assert workflow["concurrency"] == {
+        "group": "railway-production",
+        "cancel-in-progress": False,
+    }
+    assert set(workflow["jobs"]) == {"quality", "deploy"}
+    assert workflow["jobs"]["quality"] == {
+        "uses": "./.github/workflows/pr-quality.yml"
+    }
+    deploy = workflow["jobs"]["deploy"]
+    assert deploy["needs"] == "quality"
+    assert deploy["environment"] == "production"
+    assert deploy["runs-on"] == "ubuntu-24.04"
+
+
+def test_deploy_workflow_checks_out_exact_sha_and_generates_metadata_first() -> None:
+    steps = _steps(_workflow(DEPLOY_WORKFLOW)["jobs"]["deploy"])
+    checkout = steps[0]
+    metadata_index = next(
+        index for index, step in enumerate(steps) if step.get("name") == "Generate release metadata"
+    )
+    deploy_index = next(
+        index for index, step in enumerate(steps) if step.get("name") == "Deploy exact source to Railway"
+    )
+
+    assert checkout == {
+        "uses": CHECKOUT_REF,
+        "with": {"ref": "${{ github.sha }}", "persist-credentials": False},
+    }
+    assert metadata_index < deploy_index
+    metadata = steps[metadata_index]
+    assert metadata["env"] == {"EXPECTED_GIT_SHA": "${{ github.sha }}"}
+    assert "release.json" in metadata["run"]
+    assert "os.environ['EXPECTED_GIT_SHA']" in metadata["run"]
+    assert "${{" not in metadata["run"]
+
+
+def test_deploy_workflow_pins_cli_and_targets_railway_explicitly() -> None:
+    steps = _steps(_workflow(DEPLOY_WORKFLOW)["jobs"]["deploy"])
+    install = next(step for step in steps if step.get("name") == "Install pinned Railway CLI")
+    deploy = next(step for step in steps if step.get("name") == "Deploy exact source to Railway")
+    status = next(
+        step for step in steps if step.get("name") == "Correlate Railway deployment status"
+    )
+
+    assert "@railway/cli@5.30.1" in install["run"]
+    assert '"railway 5.30.1"' in install["run"]
+    assert "railway up --json" in deploy["run"]
+    assert "--detach" not in deploy["run"]
+    assert "--project \"$RAILWAY_PROJECT_ID\"" in deploy["run"]
+    assert "--environment \"$RAILWAY_ENVIRONMENT_ID\"" in deploy["run"]
+    assert "--service \"$RAILWAY_SERVICE_ID\"" in deploy["run"]
+    assert "--message \"$EXPECTED_GIT_SHA\"" in deploy["run"]
+    assert "railway deployment list --json" in status["run"]
+    assert "--project \"$RAILWAY_PROJECT_ID\"" in status["run"]
+    assert "--environment \"$RAILWAY_ENVIRONMENT_ID\"" in status["run"]
+    assert "--service \"$RAILWAY_SERVICE_ID\"" in status["run"]
+
+
+def test_deploy_workflow_scopes_token_to_railway_cli_steps_only() -> None:
+    steps = _steps(_workflow(DEPLOY_WORKFLOW)["jobs"]["deploy"])
+    token_steps = [step for step in steps if "RAILWAY_TOKEN" in step.get("env", {})]
+
+    assert [step["name"] for step in token_steps] == [
+        "Deploy exact source to Railway",
+        "Correlate Railway deployment status",
+    ]
+    assert all(
+        step["env"]["RAILWAY_TOKEN"] == "${{ secrets.RAILWAY_TOKEN }}"
+        for step in token_steps
+    )
+    workflow_text = DEPLOY_WORKFLOW.read_text(encoding="utf-8")
+    for forbidden in [
+        "DATABASE_URL",
+        "GITHUB_CLIENT_SECRET",
+        "TOKEN_HASH_SALT",
+        "OPENROUTER",
+        "RAILWAY_API_TOKEN",
+        "Authorization:",
+    ]:
+        assert forbidden not in workflow_text
+
+
+def test_deploy_workflow_runs_verifier_after_status_and_retains_safe_evidence() -> None:
+    steps = _steps(_workflow(DEPLOY_WORKFLOW)["jobs"]["deploy"])
+    status_index = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("name") == "Correlate Railway deployment status"
+    )
+    verify_index = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("name") == "Verify runtime SHA and health"
+    )
+    artifact = steps[-1]
+
+    assert status_index < verify_index
+    verify = steps[verify_index]
+    assert verify["if"] == "always()"
+    assert "verify_release.py" in verify["run"]
+    assert "--expected-sha \"$EXPECTED_GIT_SHA\"" in verify["run"]
+    assert "--base-url \"$APPLICATION_URL\"" in verify["run"]
+    assert "--output release-evidence.json" in verify["run"]
+    assert "RAILWAY_TOKEN" not in verify["env"]
+    assert artifact["if"] == "always()"
+    assert artifact["uses"] == UPLOAD_ARTIFACT_REF
+    assert artifact["with"] == {
+        "name": "production-release-evidence-${{ github.sha }}",
+        "path": "release-evidence.json",
+        "if-no-files-found": "error",
+        "retention-days": 30,
     }

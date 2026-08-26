@@ -9,7 +9,7 @@ from pathlib import Path
 from uuid import UUID
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -38,6 +38,7 @@ from models import (
     User,
 )
 from query import aggregate_verdict, map_support_status, resolve_query
+from release_identity import load_release_git_sha
 from schemas import (
     EulaAcceptanceRequest,
     EulaAcceptanceResponse,
@@ -70,6 +71,7 @@ _GITHUB_OAUTH_CLIENT_ID: str = GITHUB_OAUTH_CLIENT_ID  # type: ignore[assignment
 _GITHUB_OAUTH_CLIENT_SECRET: str = GITHUB_OAUTH_CLIENT_SECRET  # type: ignore[assignment]
 
 EULA_VERSION = "demo-v1"
+RELEASE_GIT_SHA = load_release_git_sha()
 EULA_PATH = Path(__file__).resolve().parent / "docs" / "eula-demo-v1.md"
 try:
     EULA_CONTENT = EULA_PATH.read_text(encoding="utf-8")
@@ -188,6 +190,12 @@ def _github_identity(code: str) -> tuple[int, str]:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/version")
+def version(response: Response) -> dict[str, str]:
+    response.headers["Cache-Control"] = "no-store"
+    return {"git_sha": RELEASE_GIT_SHA}
 
 
 @app.get("/auth/login")

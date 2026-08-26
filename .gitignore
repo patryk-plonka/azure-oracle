@@ -31,6 +31,7 @@ htmlcov/
 .github/workflows/*
 !.github/workflows/pr-quality.yml
 !.github/workflows/pr-ai-review.yml
+!.github/workflows/deploy-production.yml
 !.github/pr-ai-review-rubric.md
 concept/
 !concept/

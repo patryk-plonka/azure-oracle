@@ -5,7 +5,7 @@ project_name: az-limits
 hints:
   language_family: python
   team_size: solo
-  deployment_target: fly
+  deployment_target: railway
   ci_provider: github-actions
   ci_default_flow: auto-deploy-on-merge
   bootstrapper_confidence: first-class
@@ -30,7 +30,10 @@ OpenAPI docs suit the secondary human REST persona and the MCP tool boundary.
 Auth is the one gap — FastAPI does not bundle it, so GitHub OAuth and hashed
 API tokens (FR-001/004/006) are added via libraries; the user chose this over
 Django's batteries-included but heavier, untyped, web/admin-shaped alternative
-to keep the stack typed and API-shaped. Deployment targets Fly (the starter
-default) with GitHub Actions auto-deploying on merge. Bootstrapper confidence is
-first-class, so scaffolding should be mostly smooth with occasional manual steps
-around the auth and MCP wiring.
+to keep the stack typed and API-shaped. Railway is the selected deployment
+target. GitHub Actions runs the canonical quality workflow for every final
+`main` SHA, then performs one serialized Railway CLI deployment and verifies
+the runtime SHA plus `/health`; Railway native branch autodeploy remains
+disabled. Bootstrapper confidence is first-class, so scaffolding should be
+mostly smooth with occasional manual steps around auth, MCP wiring, and
+production environment configuration.

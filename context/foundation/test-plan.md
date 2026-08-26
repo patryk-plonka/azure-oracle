@@ -6,7 +6,7 @@
 >
 > Refresh: re-run `/10x-test-plan --refresh` when stale (see §8).
 >
-> Last updated: 2026-07-26
+> Last updated: 2026-08-26
 
 ## 1. Strategy
 
@@ -94,7 +94,7 @@ orchestrator updates Status as artifacts appear on disk.
 | 2 | Auth/license gate + secret stripping | Prove the per-request token+license gate rejects correctly and no secret leaks | #3, #4 | integration + unit | researched | context/changes/testing-auth-license-gate/ |
 | 3 | Query-core provenance & support-status contract | Prove every served record carries provenance, unverified are excluded, and empty matches return a clean empty result | #1, #2, #6 | integration | complete | context/changes/rest-search-query-core/ |
 | 4 | Deploy-config & readiness safety | Prove "healthy" cannot lie: host rejection plus readiness reflecting DB state | #7 | unit + integration | not started | — |
-| 5 | Quality-gates wiring | Lock lint/typecheck and pytest in CI | cross-cutting | gates | not started | — |
+| 5 | Quality-gates wiring | Lock lint/typecheck and pytest in CI | cross-cutting | gates | complete | context/changes/deploy-pipeline/ |
 
 **Status vocabulary** (fixed — parser literals): `not started` →
 `change opened` → `researched` → `planned` → `implementing` → `complete`.
@@ -108,8 +108,8 @@ The classic test base for this project. AI-native tools (if any) carry a
 |-------|------|---------|-------|
 | unit + integration | pytest | >=8.0 | Configured in `pyproject.toml` (`[tool.pytest.ini_options]`, `pythonpath=["."]`) |
 | API / HTTP client | httpx + FastAPI `TestClient` | >=0.27 | Already used by `tests/test_health.py`; in-process, no running server |
-| DB fixtures | none yet — see §3 Phase 1 | — | Import + query tests need a seeded fixture DB (arrives with F-02) |
-| lint + typecheck | none yet — see §3 Phase 5 | — | No ruff/mypy wired; Phase 5 selects and wires them |
+| DB fixtures | pytest + disposable PostgreSQL | PostgreSQL 16 in CI | `tests/conftest.py` applies migrations and isolates `TEST_DATABASE_URL`; CI provisions a service container |
+| lint + typecheck | Ruff + mypy | locked dev dependencies | Required locally and in the reusable GitHub Actions quality workflow |
 | e2e | not planned for v1 | — | API + MCP only, no UI (PRD §Non-Goals); integration covers the surface |
 | AI-native | none — deterministic typed contracts, no UI | n/a | When NOT to use: never add a vision/LLM-judge layer over a deterministic JSON contract an assertion already catches. Revisit if relevance-matching becomes fuzzy (v1.1, Open Question #4) |
 
@@ -127,12 +127,12 @@ phase lands; before that, the gate is `planned`.
 
 | Gate | Where | Required? | Catches |
 |------|-------|-----------|---------|
-| lint + typecheck | local + CI | required after §3 Phase 5 | syntactic / type drift |
+| lint + typecheck | local + CI | required | syntactic / type drift |
 | unit + integration | local + CI | required after §3 Phase 1 | logic regressions, provenance/import defects |
 | provenance guardrail (no result without source URL + quote) | CI on PR | required after §3 Phase 3 | provenance-less results (Risk #1) |
 | auth/license gate + secret-stripping | CI on PR | required after §3 Phase 2 | access bypass (Risk #3), secret leakage (Risk #4) |
 | readiness reflects dependencies | CI on PR | required after §3 Phase 4 | false-healthy deploys (Risk #7) |
-| pre-prod smoke (`/health` over HTTPS) | between merge + prod | optional | environment-specific failures |
+| exact-SHA release smoke (`/version` then `/health` over HTTPS) | after Railway deploy | required for a successful release | stale revision and environment-specific liveness failures |
 
 ## 6. Cookbook Patterns
 
@@ -201,13 +201,17 @@ Exclusions agreed during the rollout (Phase 2 interview, Q5). Future
 contributors should respect these unless the underlying assumption changes.
 
 - **GitHub's OAuth provider itself** — do not test GitHub's flow; test only our callback handling, EULA gate, and license assignment. Re-evaluate if a second identity provider is added (PRD Open Question #1). (Source: Phase 2 interview Q5.)
-- **Railway / infrastructure deploy mechanics** — deploy plumbing is covered by the `/health` check and manual verification, not unit tests. Re-evaluate if CI auto-deploy-on-merge lands. (Source: Phase 2 interview Q5.)
+- **Railway provider internals** — do not reproduce Railway's own build/deploy
+  engine in unit tests. Repository workflow contracts, Railway JSON parsing,
+  deployment correlation, exact-SHA verification, bounded failure behavior,
+  and evidence normalization are deterministic tests; hosted target selection,
+  native-autodeploy state, canaries, and rollback remain manual checks.
 - **FastAPI / Pydantic framework internals** (serialization, OpenAPI generation) — the framework is the test; assert *our* contract fields are populated, not that serialization works. Re-evaluate never, unless a custom serializer is introduced.
 - **AI-native / vision review** — no UI exists (API + MCP only); deterministic typed contracts make a vision/LLM-judge layer pure cost. Re-evaluate if relevance-matching becomes non-deterministic (v1.1).
 
 ## 8. Freshness Ledger
 
-- Strategy (§1–§5) last reviewed: 2026-07-26
+- Strategy (§1–§5) last reviewed: 2026-08-26
 - Stack versions last verified: 2026-07-26
 - AI-native tool references last verified: 2026-07-26
 

@@ -79,10 +79,21 @@ The team shipped AzLimits on Railway in week 3 and the demo was flawless. The tr
 
 ## Operational Story
 
-- **Preview deploys**: Railway builds a deployment per push on a connected branch; enabling **PR environments** spins up an isolated ephemeral environment (its own service + variables + URL) per pull request, torn down on merge/close. Preview URLs are public by default — gate anything sensitive at the app layer (token + Demo-license check), since there is no built-in access wall like Cloudflare Access.
+- **Production releases**: GitHub Actions is the selected control plane. Every
+  push to `main` runs exact-SHA quality checks, then one serialized Railway CLI
+  deployment, `/version` identity verification, and `/health` liveness check.
+  Railway native branch autodeploy is an alternative and must remain disabled
+  while the Actions-controlled workflow exists. PR preview environments remain
+  out of scope.
 - **Secrets**: Store `GITHUB_OAUTH_*`, DB URL, and token-hash salt as **Railway service variables** (per-environment), or reference them from a shared variable group; never commit them. They are injected as env vars at runtime. The app must never log raw values (PRD hard rule) — strip secrets from structured logs and error responses. Rotation = update the variable and redeploy; there is no dedicated rotation UI.
-- **Rollback**: `railway redeploy` redeploys the current service, and previous deployments can be rolled back from the deployment list (CLI `railway deployment list` → redeploy a prior deployment, or the dashboard "Rollback" action); typical time-to-revert is a single build cycle. **Caveat**: rollback reverts code/config only — database schema migrations do **not** roll back automatically, so forward-fix destructive migrations.
-- **Approval**: Human-only actions — provisioning/deleting a database, rotating the primary token-hash salt or OAuth secret, and any destructive data import against production. An agent may deploy, tail logs, and roll back code unattended via the CLI/MCP with a project-scoped token.
+- **Rollback**: A human selects a known-good prior deployment in Railway and
+  uses the dashboard rollback action after checking schema compatibility.
+  Rollback reverts code/config only—database migrations do not roll back—so
+  destructive changes require a forward fix.
+- **Approval**: The GitHub Actions release is automatic after exact-SHA quality
+  checks. Human-only actions include rollback, provisioning/deleting a database,
+  rotating the token-hash salt or OAuth secret, and any destructive production
+  import.
 - **Logs**: `railway logs` (add `-n <lines>`, `--build` for build logs) streams runtime and build logs read-only; the same is available through the GA MCP server as structured tools for an agent, and in the dashboard. Ensure the minimal logging floor (request + error, secrets stripped) the PRD requires.
 
 ## Risk Register
@@ -93,24 +104,32 @@ The team shipped AzLimits on Railway in week 3 and the demo was flawless. The tr
 | Usage-based billing spikes under abuse traffic | Devil's advocate / Pre-mortem | M | M | Configure a Railway **usage/spend limit and alert**; implement the PRD's rate-limiting NFR so abusive volume is rejected before it meters CPU/egress. |
 | Secrets/tokens leak into logs | Devil's advocate / Research finding | L | H | Enforce the "hash-only, never log" rule in code; strip secrets from structured logs and error bodies; store values as Railway service variables, not in the repo. |
 | Runtime drift on rebuild (Railpack) | Unknown unknowns | M | M | Commit a pinned `.python-version` (3.12) and an explicit start command; rely on `uv.lock` for dependency pinning; verify the resolved runtime after each deploy. |
-| Health-check host rejected → failed deploy | Unknown unknowns | M | L | Add Railway's health-check host to FastAPI `TrustedHostMiddleware`/allowed hosts; expose the FR-013 `/health` + readiness endpoints and point Railway's health check at them. |
+| Health-check host rejected → failed deploy | Unknown unknowns | M | L | Add Railway's health-check host to FastAPI `TrustedHostMiddleware`/allowed hosts and point Railway's health check at `/health`; dependency-aware readiness remains pending. |
 | SQLite-on-volume blocks scaling/region move | Devil's advocate / Unknown unknowns | L | M | Keep the data layer on **external Postgres** (stateless service) from day one so the app can run >1 instance and migrate regions without rework. |
 | DB migration not covered by code rollback | Research finding | M | M | Treat schema migrations as forward-only; test migrations against a staging environment/PR environment before production; never run destructive imports against prod. |
 | MCP token over-scoped | Unknown unknowns | L | M | Scope the `railway mcp` token to a single project/environment (least privilege), matching the PRD access-control model. |
 
-## Getting Started
+## Current Deployment Handoff
 
-Version-accurate for Python 3.12 + `uv` (from `tech-stack.md`) on Railway's current Railpack builder:
+The platform-selection research above is preserved as dated historical context.
+The repository now owns the active deployment procedure in
+`context/deployment/deploy-plan.md`:
 
-1. **Install the CLI**: `npm i -g @railway/cli` (or `iwr https://railway.app/install.ps1 | iex` on Windows PowerShell), then `railway login`.
-2. **Pin the runtime** so Railpack resolves the same interpreter as `uv.lock`: add a `.python-version` file containing `3.12`. Railpack auto-detects `uv` from the committed `uv.lock` and runs `uv sync` at build time — no Dockerfile needed.
-3. **Set the start command** (Railway dashboard → service → Settings, or `railway.json`): `uv run uvicorn main:app --host 0.0.0.0 --port $PORT`. Do not hard-code the port — Railway injects `$PORT`.
-4. **Init and deploy**: from the repo root run `railway init` (create/link a project), set service variables (`railway variables --set GITHUB_OAUTH_CLIENT_ID=...` etc. — never commit secrets), then `railway up` to build and deploy. Point Railway's health check at the FR-013 `/health` endpoint and add its host to FastAPI allowed hosts.
-5. **Provision the database externally** (external providers accepted): create a managed Postgres (e.g. Neon/Supabase), then `railway variables --set DATABASE_URL=...`. Optionally `railway mcp install` to give the agent scoped, structured access to deploys/logs.
+1. Keep `.python-version`, `uv.lock`, and `railway.json` committed.
+2. Keep application runtime secrets in Railway service variables.
+3. Configure the GitHub `production` Environment with non-secret target IDs and
+   HTTPS URL plus only a scoped `RAILWAY_TOKEN` secret.
+4. Keep Railway native GitHub autodeploy disabled.
+5. Release through `push: main`; do not use a parallel manual or native deploy
+   path for routine production changes.
+6. Use retained normalized evidence and the documented human rollback procedure
+   for incidents. A code rollback never reverses a database migration.
 
 ## Out of Scope
 
 The following were not evaluated in this research:
 - Docker image configuration
-- CI/CD pipeline setup
 - Production-scale architecture (multi-region, HA, DR)
+
+CI/CD was outside this dated selection exercise but was subsequently designed
+and implemented in `context/changes/deploy-pipeline/`.

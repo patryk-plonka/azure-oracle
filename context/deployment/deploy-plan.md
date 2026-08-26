@@ -3,7 +3,8 @@ project: AzLimits
 platform: Railway
 runner_up: Fly.io
 planned_at: 2026-07-19
-deploy_trigger: manual-cli
+updated_at: 2026-08-26
+deploy_trigger: github-actions-push-main
 context_type: mvp
 tech_stack:
   language: Python 3.12
@@ -14,162 +15,195 @@ database: external managed Postgres (Neon free tier)
 source_docs:
   - context/foundation/infrastructure.md
   - context/foundation/tech-stack.md
+  - context/changes/deploy-pipeline/plan.md
 ---
 
-# Deploy Plan — AzLimits → Railway (first deployment)
+# Production Release Runbook — AzLimits → Railway
 
-Human-gated first-deploy audit trail: the record of *what is supposed to happen*
-when AzLimits is deployed to **Railway** with an **external Neon Postgres**, per
-`infrastructure.md` and `tech-stack.md`. The first deploy is a **manual
-`railway up`**; CI auto-deploy-on-merge is a documented follow-up. This document
-does not build the application — a deployable FastAPI app is an **entry gate**.
+AzLimits releases through `.github/workflows/deploy-production.yml`. Every push
+to `main`, including a merged pull request or direct push, runs the canonical
+Ruff, mypy, and PostgreSQL-backed coverage workflow for the triggering full Git
+SHA. A successful quality job then starts one serialized, non-canceling Railway
+deployment and verifies that the running application reports that same SHA and
+returns HTTP 200 from `/health`.
 
-## Decisions
+The workflow is fully automatic after its exact-SHA quality checks. Do not add
+an environment approval timer or reviewer unless the product's automatic
+release requirement is deliberately changed.
 
-- **App build is a prerequisite (entry gate)**, not part of this plan. `main.py`
-  is currently a hello-world stub with no FastAPI `app` object or `/health`
-  endpoint; deploy is blocked until that gate is met.
-- **External managed Postgres now** (Neon free tier) wired as `DATABASE_URL` —
-  matches the `infrastructure.md` risk-register mitigation (avoid Railway's
-  unmanaged one-click DB).
-- **Migrate before serving** — Railway runs `uv run alembic upgrade head` before
-  Uvicorn starts. The curated seed remains an explicit human-approved command;
-  it is never run during startup or deployment.
-- **Manual CLI `railway up`** for the first deploy (human-gated). GitHub Actions
-  auto-deploy is out of scope for this deploy, noted as a follow-up.
+## 1. Control Plane and Prerequisites
 
-## 1. Entry Gates (prerequisites)
+- GitHub Actions is the only production deployment control plane.
+- Railway native GitHub branch autodeploy for `main` must remain disabled. If it
+  is enabled, one push can create duplicate, overlapping migration-capable
+  deployments.
+- `.github/workflows/pr-quality.yml` is the single canonical quality workflow;
+  the production workflow calls it rather than copying its commands.
+- `.python-version`, `uv.lock`, `railway.json`, `/health`, and `/version` are
+  committed and covered by repository tests.
+- `railway.json` runs `uv run alembic upgrade head` before Uvicorn. Migrations
+  are forward-only, so production runs use fixed `railway-production`
+  concurrency with cancellation disabled.
+- The public hostname is present in `ALLOWED_HOSTS`, and `APP_URL` matches the
+  public OAuth callback origin.
 
-All must be true before any deploy command runs:
+## 2. GitHub Production Environment
 
-- [ ] A deployable FastAPI `app` object exists (e.g. `main:app`) — replaces the
-      current hello-world stub in `main.py`.
-- [ ] A `/health` endpoint (and readiness check) is implemented (FR-013).
-- [ ] `uv.lock` is committed (Railpack reads it to detect Python + deps).
-- [ ] `.python-version` pins `3.12` (already present — runtime-drift mitigation).
-- [ ] HTTPS-only, secrets-stripped logging floor honored in app code (PRD NFRs).
+Create an Environment named exactly `production` with these non-secret
+environment variables:
 
-## 2. Manual Setup Gates (human-only)
+| Variable | Purpose |
+| --- | --- |
+| `RAILWAY_PROJECT_ID` | Intended Railway project identifier |
+| `RAILWAY_ENVIRONMENT_ID` | Intended production environment identifier |
+| `RAILWAY_SERVICE_ID` | Intended AzLimits service identifier |
+| `APPLICATION_URL` | Credential-free public HTTPS application base URL |
 
-Performed by a human, out of band, before deploy:
+Add exactly one deployment secret:
 
-1. **Railway account + project** — create the account and an empty project;
-   choose the single region (single-region MVP).
-2. **Neon managed Postgres** — provision a free-tier Postgres instance, copy the
-   pooled connection string for `DATABASE_URL`. Automated backups belong to Neon
-   (mitigates the "unmanaged DB, no PITR" risk).
-3. **GitHub OAuth app** — register the OAuth app (FR-001); set the callback URL
-  to `<APP_URL>/auth/callback`; capture client ID + secret.
-4. **Spend limit + alert** — configure a Railway usage/spend limit and alert
-   (mitigates uncapped usage-based billing under abuse traffic).
+| Secret | Scope |
+| --- | --- |
+| `RAILWAY_TOKEN` | Railway project token restricted to the intended project/environment |
 
-## 3. Secrets
+The workflow exposes `RAILWAY_TOKEN` only to `railway up` and
+`railway deployment list`. Do not copy `DATABASE_URL`, GitHub OAuth secrets,
+`TOKEN_HASH_SALT`, API tokens, OpenRouter credentials, authorization headers,
+or any other application/provider secret into GitHub Actions.
 
-All set as **Railway service variables** (per-environment), never committed to the
-repo, never printed to logs or error bodies (PRD hard rule):
+## 3. Railway Runtime Configuration
 
-| Variable | Purpose | Source |
-|---|---|---|
-| `APP_URL` | Canonical public application origin used to build the GitHub callback URL | Railway public domain |
-| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth (FR-001) | GitHub OAuth app |
-| `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth (FR-001) | GitHub OAuth app |
-| `DATABASE_URL` | External Neon Postgres connection | Neon dashboard |
-| `TOKEN_HASH_SALT` | API-token hashing (FR-004, hash-only) | generated secret |
+Keep runtime configuration as Railway service variables, per environment:
 
-Rotation = update the variable and redeploy (Railway has no dedicated rotation
-UI). Rotating the token hash salt or OAuth client secret is a **human-only**
-action (see §9). Do not commit or print any variable values, including OAuth
-credentials and `TOKEN_HASH_SALT`.
+| Variable | Purpose |
+| --- | --- |
+| `APP_URL` | Canonical public origin used for the GitHub callback URL |
+| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth application identifier |
+| `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth application secret |
+| `DATABASE_URL` | External managed PostgreSQL connection |
+| `TOKEN_HASH_SALT` | API-token hashing secret |
+| `ALLOWED_HOSTS` | Public and Railway health-check hosts |
 
-`OAuthState` stores the short-lived callback state before identity is known.
-User-owned `AuthGrant` rows store the short-lived onboarding and token-issuance
-credentials. Both boundaries retain hashes only; no raw bearer value is stored.
+Never configure `TEST_DATABASE_URL` in Railway production. Never print, copy to
+evidence, or commit any variable value. The curated seed remains a separate,
+human-approved operation; it never runs during deployment.
 
-## 4. Railway Configuration
+Railway uses the committed start contract:
 
-- **Start command**: `uv run alembic upgrade head && uv run uvicorn main:app --host 0.0.0.0 --port $PORT`
-  — applies forward-only migrations before Uvicorn starts; do **not** hard-code
-  the port, and do **not** append the seed command. Railway injects `$PORT`.
-- **Builder**: Railpack auto-detects `uv` from the committed `uv.lock` and runs
-  `uv sync` at build — no Dockerfile required.
-- **Health check**: point Railway's health check at `/health`.
-- **Trusted host**: add Railway's health-check host to FastAPI
-  `TrustedHostMiddleware` / allowed hosts, or zero-downtime deploys fail the
-  health gate in a way that looks like an app bug.
-- **Runtime pin**: `.python-version` = `3.12` + `uv.lock` keep Railpack from
-  drifting to a different interpreter on rebuild.
+```text
+uv run alembic upgrade head && uv run uvicorn main:app --host 0.0.0.0 --port $PORT --no-access-log
+```
 
-## 5. Agent-Owned Automated Steps
+The Railway activation health check targets `/health`.
 
-An agent may run these unattended with a **project-scoped** token:
+## 4. Automatic Release Sequence
 
-1. Install the CLI: `npm i -g @railway/cli`
-   (or PowerShell: `iwr https://railway.app/install.ps1 | iex`).
-2. `railway login`
-3. `railway init` (create/link the project) — or `railway link` to an existing one.
-4. Set variables without echoing secret values: `APP_URL`,
-  `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `DATABASE_URL`, and
-  `TOKEN_HASH_SALT`.
-5. Deploy: `railway up`
-6. Tail logs: `railway logs` (`--build` for build logs, `-n <lines>` to limit).
+1. A `push` to `main` starts `Deploy Production` for the triggering full SHA.
+2. The reusable quality job checks out that exact SHA and runs Ruff, mypy, and
+   the PostgreSQL-backed test/coverage suite.
+3. The deploy job enters fixed non-canceling `railway-production` concurrency
+   and the `production` Environment.
+4. The job checks out the same SHA with persisted credentials disabled.
+5. It generates `release.json` containing exactly that SHA. The file exists in
+   the uploaded source bundle but is not committed.
+6. Railway CLI 5.30.1 uploads the source in attached JSON mode with explicit
+   project, environment, and service targets. The SHA is also attached as the
+   deployment message for provider-record correlation.
+7. The workflow requires one matching `SUCCESS` deployment from
+   `railway deployment list --json`.
+8. `verify_release.py` checks HTTPS `/version` first and requires exact full-SHA
+   equality, then checks `/health` for HTTP 200. Retries and request/overall
+   timeouts are bounded.
+9. The workflow writes a concise GitHub step summary and retains only normalized
+   `release-evidence.json` for 30 days.
 
-## 5.1 Database Migration and Seed Procedure
+Do not add `--detach`; queueing a build is not production acceptance. Do not
+introduce implicit locally linked targets or a mutable Railway CLI version.
 
-After Neon is provisioned and its connection string is set as `DATABASE_URL`:
+## 5. Release Evidence
 
-1. Deploy or run `uv run alembic upgrade head` to apply forward-only migrations.
-2. As a human-approved operator action, run
-  `uv run python seed.py concept/azure_limitations_db.csv` once.
-3. Review only the reported source and limitation counts; the command never
-  prints the connection string.
-4. Re-running the command is safe and updates records in place. It does not
-  truncate data or execute automatically during deployment.
+The normalized artifact and step summary record only safe release facts:
 
-## 6. Verification
+- source full Git SHA and GitHub quality/release run ID;
+- Railway deployment ID, terminal status, and creation timestamp;
+- observed `/version` SHA, HTTP status, attempts, and verification timestamp;
+- `/health` HTTP status, attempts, and verification timestamp;
+- overall success/failure state, safe failure code, and UTC timestamps.
 
-After `railway up` completes:
+Raw Railway logs, response bodies, provider metadata, credentials, headers, and
+secret values are never retained as evidence. Treat a missing artifact, an
+`unknown`/malformed/mismatched runtime SHA, ambiguous Railway record, redirect,
+non-HTTPS URL, timeout, or non-200 response as a failed release.
 
-- [ ] Build resolved **Python 3.12** (check build logs against `uv.lock`).
-- [ ] `GET /health` returns `200` over **HTTPS** at the Railway URL.
-- [ ] The running service can reach the Neon Postgres (`DATABASE_URL`).
-- [ ] `APP_URL` matches the public origin and GitHub callback URL exactly.
-- [ ] `GET /auth/eula` serves the packaged Demo terms after startup.
-- [ ] Search/query p95 **< 800 ms** over the seeded dataset (PRD NFR).
-- [ ] No secret or token value appears in build or runtime logs.
-- [ ] EULA/license events are logged (secrets stripped) per the logging floor.
+## 6. Health and Readiness Boundary
 
-## 7. Rollback
+`GET /health` is process liveness only. It is intentionally static and does not
+prove PostgreSQL or another dependency is reachable. `GET /version` proves the
+running source identity but is not a readiness check. Dependency-aware readiness
+remains pending in `context/foundation/test-plan.md`; do not describe a green
+release as proof of database readiness.
 
-- Code/config: `railway deployment list` → `railway redeploy` a prior deployment
-  (or the dashboard "Rollback" action). Time-to-revert ≈ one build cycle.
-- **Database migrations do NOT roll back with code** — treat schema migrations as
-  forward-only and forward-fix destructive changes. Never run destructive imports
-  against production.
+## 7. Failure Triage
 
-## 8. Approval Boundary
+1. Open the failed Actions run and read the normalized failure code and step
+   summary. Compare the triggering SHA with any available evidence.
+2. Download `production-release-evidence-<sha>` when present. Do not attach raw
+   logs to the artifact or copy secrets into an issue.
+3. Inspect the matching Railway deployment status and bounded build/runtime
+   logs in Railway. Redact credentials and connection strings before sharing.
+4. Determine whether failure occurred in quality, CLI installation/upload,
+   Railway terminal status, `/version`, or `/health`.
+5. Do not automatically roll back. Startup may already have applied a
+   forward-only migration, so code/schema compatibility requires human review.
 
-- **Agent may (unattended, scoped token)**: `railway up`, tail logs, roll back
-  code via CLI/MCP.
-- **Human-only**: provisioning/deleting a database, rotating the `TOKEN_HASH_SALT`
-  or OAuth secret, and any destructive data import against production.
-- If the Railway MCP server is installed, scope its token to a single
-  project/environment (least privilege, per the PRD access-control model).
+To stop future automatic releases, disable `Deploy Production` in GitHub Actions
+or land a reviewed change that disables its `push: main` trigger. This does not
+undo the current deployment or schema. Keep Railway native autodeploy disabled
+while the Actions workflow exists, including during incident response.
 
-## 9. Risks (carried from infrastructure.md)
+## 8. Human Rollback
 
-| Risk | Mitigation in this plan |
-|---|---|
-| Unmanaged DB loses provenance data (no PITR) | Use external **Neon** Postgres with automated backups; keep CSV seed + import script in VCS as a re-seed path. |
-| Usage-based billing spikes under abuse | Railway spend **limit + alert**; enforce the PRD rate-limiting NFR. |
-| Secrets/tokens leak into logs | Hash-only rule in code; strip secrets from logs/errors; secrets as Railway variables only. |
-| Runtime drift on rebuild (Railpack) | `.python-version` = 3.12 + `uv.lock`; verify resolved runtime post-deploy. |
-| Health-check host rejected → failed deploy | Add Railway health-check host to FastAPI allowed hosts; point health check at `/health`. |
-| SQLite-on-volume blocks scaling/region move | Keep data on **external Postgres** (stateless service) from day one. |
-| DB migration not covered by code rollback | Forward-only migrations; test in a PR/staging environment first. |
-| MCP token over-scoped | Scope the `railway mcp` token to one project/environment. |
+1. Identify the last known-good Railway deployment ID from retained evidence and
+   the Railway deployment list.
+2. Review migrations applied since that deployment. Confirm the prior code can
+   run safely against the current schema; database migrations are not reversed.
+3. In the Railway dashboard, select that prior deployment and use its rollback
+   action for the intended production service/environment.
+4. Confirm the resulting deployment reaches a successful terminal state.
+5. Check HTTPS `/health` for liveness and `/version` for the SHA that is now
+   running. A rollback intentionally reports the prior SHA.
+6. Record the deployment ID, observed SHA, health result, timestamps, operator,
+   and any forward-migration constraint. Review logs for secret leakage.
+7. Leave the deterministic PR quality workflow enabled. Re-enable the production
+   workflow only after the failure cause and schema compatibility are understood.
+
+Never run a destructive import or down migration as an automatic rollback step.
+
+## 9. Initial Enablement Checklist
+
+- [ ] GitHub `production` Environment is automatic and has the four intended
+      non-secret variables plus only the scoped `RAILWAY_TOKEN` deployment secret.
+- [ ] Railway runtime variables contain all application secrets and no
+      `TEST_DATABASE_URL`.
+- [ ] Railway native GitHub autodeploy for `main` is disabled.
+- [ ] Project, environment, service, HTTPS URL, OAuth origin, and allowed hosts
+      identify the same production target.
+- [ ] A safe canary push records one matching quality → Railway → `/version` →
+      `/health` evidence chain.
+- [ ] A second canary confirms non-canceling serialization and exactly one
+      Railway deployment per push.
+- [ ] A controlled verifier failure retains safe evidence, fails visibly, and
+      does not auto-rollback.
+- [ ] A human rollback drill restores liveness and records the forward-migration
+      caveat.
+- [ ] Actions and Railway logs for canary, failure, and rollback contain no raw
+      token, OAuth credential, database URL, hash salt, authorization header, or
+      provider secret.
 
 ## 10. Out of Scope
 
-- Docker image configuration.
-- CI/CD pipeline (GitHub Actions auto-deploy-on-merge) — documented follow-up.
-- Production-scale architecture (multi-region, HA, DR).
+- Dependency-aware `/ready` acceptance.
+- Pull-request previews, staging, canaries with traffic splitting, multi-region,
+  high availability, or disaster-recovery automation.
+- Automatic rollback, database down migrations, or destructive data operations.
+- Railway native branch deployment alongside the Actions-controlled pipeline.
+- GitHub Deployment API records or application runtime secrets in Actions.

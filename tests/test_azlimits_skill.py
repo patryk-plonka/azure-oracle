@@ -41,8 +41,10 @@ SYMLINK_HINT = (
 
 # Stable failure classes are owned by the MCP adapter; read them from it rather than
 # restating a second hard-coded contract here.
+# Anchored to the emission shape ("azlimits_x: ...") rather than to any lowercase
+# azlimits_* symbol, so a future helper or docstring cannot join the error contract.
 ERROR_CODES = frozenset(
-    re.findall(r"\bazlimits_[a-z_]+\b", (REPO_ROOT / "mcp_server.py").read_text(encoding="utf-8"))
+    re.findall(r'"(azlimits_[a-z_]+):', (REPO_ROOT / "mcp_server.py").read_text(encoding="utf-8"))
 )
 
 # Setup, repository-development, and credential-handling material must stay out of a
@@ -61,6 +63,12 @@ OUT_OF_SCOPE_MARKERS = (
     "DATABASE_URL",
     "AZLIMITS_API_TOKEN",
     "AZLIMITS_API_BASE_URL",
+)
+
+# Words appearing in the skill's Title-case service query examples. Only consulted for
+# non-lowercase tokens, so it never masks a real lower snake case identifier.
+PROSE_EXAMPLE_WORDS = frozenset(
+    {"azure", "kubernetes", "service", "firewall", "blob", "storage", "sftp"}
 )
 
 CREDENTIAL_SHAPES = (
@@ -107,9 +115,24 @@ def live_tool_contract() -> tuple[frozenset[str], frozenset[str]]:
 
 
 def backticked_identifiers(text: str) -> set[str]:
-    """Return the snake_case code spans the skill presents as machine vocabulary."""
-    spans = re.findall(r"`([^`]+)`", text)
-    return {span for span in spans if re.fullmatch(r"[a-z][a-z0-9_]*", span)}
+    """Return the identifier-shaped tokens the skill presents as machine vocabulary.
+
+    Tokenizes *inside* each backtick span rather than matching the span whole, so a
+    span like `search_limitations(q, max_results)` cannot smuggle an invented input
+    past the contract check. Every real identifier in this contract is lower snake
+    case; the only other backtick spans are the Title-case service query examples, so
+    a non-lowercase token is prose when it is a known example word and invented
+    vocabulary otherwise. The stoplist is consulted only for non-lowercase tokens,
+    which keeps legitimate fields such as `service` from being filtered out.
+    """
+    tokens: set[str] = set()
+    for span in re.findall(r"`([^`]+)`", text):
+        tokens.update(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", span))
+    return {
+        token
+        for token in tokens
+        if re.fullmatch(r"[a-z][a-z0-9_]*", token) or token.lower() not in PROSE_EXAMPLE_WORDS
+    }
 
 
 def policy_clause(term: str) -> str:
@@ -139,6 +162,11 @@ def test_description_triggers_on_production_azure_iac_work(trigger: str) -> None
 def test_skill_uses_only_the_live_tool_and_input_vocabulary() -> None:
     tool_names, tool_inputs = live_tool_contract()
 
+    # Without these the loops below are no-ops on an empty surface, and this test would
+    # pass green on exactly the regression it exists to catch.
+    assert tool_names, "The MCP server exposes no tools."
+    assert tool_inputs, "The MCP server exposes no tool inputs."
+
     for name in tool_names:
         assert f"`{name}`" in BODY, f"The skill must name the live tool `{name}`."
     for input_name in tool_inputs:
@@ -157,7 +185,10 @@ def test_skill_declares_no_vocabulary_outside_the_implemented_contract() -> None
         | set(ERROR_CODES)
     )
 
-    unknown = backticked_identifiers(BODY) - allowed
+    declared = backticked_identifiers(BODY)
+    assert declared, "No code vocabulary found in the skill; the subset check below is vacuous."
+
+    unknown = declared - allowed
     assert not unknown, (
         f"The skill presents identifiers the implementation does not expose: {sorted(unknown)}. "
         "Speculative tools, inputs, fields, statuses, or error codes must not be invented."
@@ -204,7 +235,12 @@ def test_every_stable_error_class_is_handled_and_none_is_invented() -> None:
 
 
 def test_invalid_search_input_is_corrected_rather_than_retried_blindly() -> None:
-    clause = re.search(r"`azlimits_upstream_unavailable`(.*?)(?=\n- `|\Z)", BODY, re.DOTALL)
+    # Stop at the end of this bullet: it is the last one in its section, so without the
+    # blank-line and heading terminators the clause would run to end of file and could be
+    # satisfied by unrelated trailing prose.
+    clause = re.search(
+        r"`azlimits_upstream_unavailable`(.*?)(?=\n- `|\n\n|\n## |\Z)", BODY, re.DOTALL
+    )
     assert clause is not None
     guidance = flatten(clause.group(1)).lower()
 
@@ -290,7 +326,13 @@ def test_client_alias_is_a_real_symlink(alias: str) -> None:
 
 @pytest.mark.parametrize("alias", CLIENT_ALIASES)
 def test_client_alias_targets_the_canonical_skill_relatively(alias: str) -> None:
-    link = PurePosixPath(os.readlink(REPO_ROOT / alias).replace("\\", "/"))
+    path = REPO_ROOT / alias
+    # Without this guard os.readlink raises a bare OSError on the very checkout the
+    # hint is written for, and the diagnosis is lost.
+    if not path.is_symlink():
+        pytest.fail(f"{alias} is not a symlink, so it has no link target. {SYMLINK_HINT}")
+
+    link = PurePosixPath(os.readlink(path).replace("\\", "/"))
 
     assert link == EXPECTED_LINK_TARGET, (
         f"{alias} must point at {EXPECTED_LINK_TARGET} so the alias stays portable across "

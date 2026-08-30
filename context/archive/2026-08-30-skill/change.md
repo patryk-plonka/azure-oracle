@@ -1,10 +1,10 @@
 ---
 change_id: skill
 title: Add a dedicated skill for using the AzLimits MCP tool
-status: impl_reviewed
+status: archived
 created: 2026-08-30
 updated: 2026-08-30
-archived_at: null
+archived_at: 2026-08-30T15:35:39Z
 ---
 
 ## Notes

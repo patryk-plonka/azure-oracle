@@ -8,9 +8,11 @@ constant or the live MCP tool schema so the two cannot drift apart silently.
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 from functools import lru_cache
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import anyio
 import pytest
@@ -23,6 +25,19 @@ from schemas import LimitationRecord, QueryContext, SearchResponse
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_SKILL = REPO_ROOT / ".agents" / "skills" / "azlimits" / "SKILL.md"
+
+# Every client discovers the one canonical directory through a relative symlink; a copy
+# would silently fork the instructions the next time only one path is edited.
+CLIENT_ALIASES = (".github/skills/azlimits", ".codex/skills/azlimits", ".claude/skills/azlimits")
+EXPECTED_LINK_TARGET = PurePosixPath("../../.agents/skills/azlimits")
+SYMLINK_MODE = "120000"
+
+SYMLINK_HINT = (
+    "This usually means the checkout did not materialize Git symlinks: on Windows, "
+    "`git config core.symlinks true` requires Developer Mode or the "
+    "SeCreateSymbolicLinkPrivilege. Re-enable symlinks and re-check out the path. "
+    "Do not replace the alias with a copied directory."
+)
 
 # Stable failure classes are owned by the MCP adapter; read them from it rather than
 # restating a second hard-coded contract here.
@@ -239,3 +254,71 @@ def test_skill_contains_no_credential_shaped_example(pattern: str) -> None:
     raw = CANONICAL_SKILL.read_text(encoding="utf-8")
 
     assert not re.search(pattern, raw, re.IGNORECASE)
+
+
+@lru_cache(maxsize=1)
+def git_index_modes() -> dict[str, str]:
+    """Return the mode Git records for each client alias, keyed by repository path."""
+    try:
+        completed = subprocess.run(
+            ["git", "ls-files", "-s", "--", *CLIENT_ALIASES],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:  # pragma: no cover - no Git
+        pytest.skip(f"Git is unavailable for index inspection: {error}")
+
+    modes: dict[str, str] = {}
+    for line in completed.stdout.splitlines():
+        metadata, _, path = line.partition("\t")
+        modes[path.strip()] = metadata.split()[0]
+    return modes
+
+
+@pytest.mark.parametrize("alias", CLIENT_ALIASES)
+def test_client_alias_is_a_real_symlink(alias: str) -> None:
+    path = REPO_ROOT / alias
+
+    assert path.exists(), f"{alias} is missing. {SYMLINK_HINT}"
+    assert path.is_symlink(), (
+        f"{alias} exists but is not a symlink, so it is a copy that will fork from the "
+        f"canonical skill. {SYMLINK_HINT}"
+    )
+
+
+@pytest.mark.parametrize("alias", CLIENT_ALIASES)
+def test_client_alias_targets_the_canonical_skill_relatively(alias: str) -> None:
+    link = PurePosixPath(os.readlink(REPO_ROOT / alias).replace("\\", "/"))
+
+    assert link == EXPECTED_LINK_TARGET, (
+        f"{alias} must point at {EXPECTED_LINK_TARGET} so the alias stays portable across "
+        f"checkouts; it points at {link}."
+    )
+
+
+@pytest.mark.parametrize("alias", CLIENT_ALIASES)
+def test_client_alias_resolves_to_the_canonical_skill(alias: str) -> None:
+    resolved = (REPO_ROOT / alias).resolve()
+
+    assert resolved == CANONICAL_SKILL.parent.resolve(), (
+        f"{alias} resolves to {resolved} instead of the canonical skill directory. {SYMLINK_HINT}"
+    )
+    assert (resolved / "SKILL.md").read_text(encoding="utf-8") == CANONICAL_SKILL.read_text(
+        encoding="utf-8"
+    )
+
+
+@pytest.mark.parametrize("alias", CLIENT_ALIASES)
+def test_git_records_each_client_alias_as_a_symlink(alias: str) -> None:
+    mode = git_index_modes().get(alias)
+
+    assert mode is not None, (
+        f"Git does not track {alias}, so a fresh clone would not get the alias. Check that "
+        f".gitignore allows the path and that the alias has been added."
+    )
+    assert mode == SYMLINK_MODE, (
+        f"Git records {alias} with mode {mode} instead of {SYMLINK_MODE} (symlink). "
+        f"{SYMLINK_HINT}"
+    )

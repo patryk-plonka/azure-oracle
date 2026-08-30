@@ -295,6 +295,37 @@ replaying a potentially consumed state-changing request:
 	license.
 - `azlimits_upstream_unavailable` — retry after the AzLimits API is available.
 
+## Azure Limitations Skill
+
+Once the MCP tool is configured, coding agents load the `azlimits` skill
+automatically when they generate, modify, review, or approve production Azure
+architecture or infrastructure-as-code. The skill directs the agent to search
+limitations per service before the design is finalized, to keep each record's
+source provenance intact, and to treat an empty result or a tool failure as
+inconclusive rather than as approval.
+
+The skill is maintained once, at `.agents/skills/azlimits/SKILL.md`. Every
+client path is a repository-relative symlink to that same directory:
+
+- `.github/skills/azlimits` — GitHub Copilot
+- `.codex/skills/azlimits` — Codex
+- `.claude/skills/azlimits` — Claude
+
+Edit only the canonical file. The aliases are symlinks, not copies, so a change
+made through any path lands in the same file, and
+`tests/test_azlimits_skill.py` fails if an alias becomes a copy, a broken link,
+or resolves somewhere else.
+
+The checkout must preserve real symlinks. On Windows that needs
+`core.symlinks=true` together with Developer Mode or the
+SeCreateSymbolicLinkPrivilege. If an alias materializes as an ordinary file
+containing a path, re-enable symlinks and re-check out that path instead of
+replacing it with a copied directory.
+
+The skill is for production use after onboarding and MCP configuration are
+complete; see [MCP Tool Setup](#mcp-tool-setup). It carries no setup, token, or
+repository-development instructions, and it never asks a user for a token.
+
 ## Verification
 
 Use a disposable PostgreSQL database for `TEST_DATABASE_URL`, distinct from

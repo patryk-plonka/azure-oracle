@@ -33,6 +33,9 @@ htmlcov/
 !.github/workflows/pr-ai-review.yml
 !.github/workflows/deploy-production.yml
 !.github/pr-ai-review-rubric.md
+!.github/skills/
+.github/skills/*
+!.github/skills/azlimits
 concept/
 !concept/
 concept/*

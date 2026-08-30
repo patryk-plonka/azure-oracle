@@ -299,31 +299,31 @@ Rollback is deletion of the three aliases, the canonical `.agents/skills/azlimit
 
 #### Automated
 
-- [x] 1.1 Canonical skill contract tests pass
-- [x] 1.2 Existing MCP adapter contract remains green
-- [x] 1.3 Ruff validates the new Python test
-- [x] 1.4 Mypy validates the new Python test
+- [x] 1.1 Canonical skill contract tests pass — cd529a6
+- [x] 1.2 Existing MCP adapter contract remains green — cd529a6
+- [x] 1.3 Ruff validates the new Python test — cd529a6
+- [x] 1.4 Mypy validates the new Python test — cd529a6
 
 #### Manual
 
-- [x] 1.5 Confirm the skill excludes repository development and setup work
-- [x] 1.6 Confirm automatic production IaC invocation boundaries
-- [x] 1.7 Trace unsupported, constrained, and zero-record decisions
+- [x] 1.5 Confirm the skill excludes repository development and setup work — cd529a6
+- [x] 1.6 Confirm automatic production IaC invocation boundaries — cd529a6
+- [x] 1.7 Trace unsupported, constrained, and zero-record decisions — cd529a6
 
 ### Phase 2: Cross-Client Discovery and Repository Handoff
 
 #### Automated
 
-- [ ] 2.1 Canonical and alias contract tests pass
-- [ ] 2.2 Git records all client aliases as resolving symlinks
-- [ ] 2.3 README and test changes pass Ruff and mypy
+- [x] 2.1 Canonical and alias contract tests pass
+- [x] 2.2 Git records all client aliases as resolving symlinks
+- [x] 2.3 README and test changes pass Ruff and mypy
 
 #### Manual
 
-- [ ] 2.4 Confirm byte-identical content through all four paths
-- [ ] 2.5 Confirm one-skill discovery in GitHub Copilot, Codex, and Claude
-- [ ] 2.6 Confirm edits through an alias affect only the canonical file
-- [ ] 2.7 Confirm README preserves the production-after-onboarding boundary
+- [x] 2.4 Confirm byte-identical content through all four paths
+- [x] 2.5 Confirm one-skill discovery in GitHub Copilot, Codex, and Claude
+- [x] 2.6 Confirm edits through an alias affect only the canonical file
+- [x] 2.7 Confirm README preserves the production-after-onboarding boundary
 
 ### Phase 3: Behavioral Forward-Test and Production MCP Smoke Test
 

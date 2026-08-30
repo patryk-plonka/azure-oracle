@@ -329,17 +329,17 @@ Rollback is deletion of the three aliases, the canonical `.agents/skills/azlimit
 
 #### Automated
 
-- [x] 3.1 Focused skill, MCP, and query tests pass together
-- [x] 3.2 Repository quality gates pass
-- [x] 3.3 Required independent forward-test scenarios pass
-- [x] 3.4 Verification record contains no credential-shaped data
+- [x] 3.1 Focused skill, MCP, and query tests pass together — 083bdec
+- [x] 3.2 Repository quality gates pass — 083bdec
+- [x] 3.3 Required independent forward-test scenarios pass — 083bdec
+- [x] 3.4 Verification record contains no credential-shaped data — 083bdec
 
 #### Manual
 
-- [x] 3.5 Confirm service-by-service production MCP invocation
-- [x] 3.6 Confirm tool calls expose only supported non-secret arguments
-- [x] 3.7 Confirm complete source-backed result presentation
-- [x] 3.8 Confirm zero-record behavior remains inconclusive
-- [x] 3.9 Confirm safe failure handling without credential disclosure
-- [x] 3.10 Confirm no verification artifact contains secrets
-- [x] 3.11 Confirm unsupported and constrained decision policy
+- [x] 3.5 Confirm service-by-service production MCP invocation — 083bdec
+- [x] 3.6 Confirm tool calls expose only supported non-secret arguments — 083bdec
+- [x] 3.7 Confirm complete source-backed result presentation — 083bdec
+- [x] 3.8 Confirm zero-record behavior remains inconclusive — 083bdec
+- [x] 3.9 Confirm safe failure handling without credential disclosure — 083bdec
+- [x] 3.10 Confirm no verification artifact contains secrets — 083bdec
+- [x] 3.11 Confirm unsupported and constrained decision policy — 083bdec

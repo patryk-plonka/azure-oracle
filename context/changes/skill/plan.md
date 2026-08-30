@@ -314,32 +314,32 @@ Rollback is deletion of the three aliases, the canonical `.agents/skills/azlimit
 
 #### Automated
 
-- [x] 2.1 Canonical and alias contract tests pass
-- [x] 2.2 Git records all client aliases as resolving symlinks
-- [x] 2.3 README and test changes pass Ruff and mypy
+- [x] 2.1 Canonical and alias contract tests pass — d2b977b
+- [x] 2.2 Git records all client aliases as resolving symlinks — d2b977b
+- [x] 2.3 README and test changes pass Ruff and mypy — d2b977b
 
 #### Manual
 
-- [x] 2.4 Confirm byte-identical content through all four paths
-- [x] 2.5 Confirm one-skill discovery in GitHub Copilot, Codex, and Claude
-- [x] 2.6 Confirm edits through an alias affect only the canonical file
-- [x] 2.7 Confirm README preserves the production-after-onboarding boundary
+- [x] 2.4 Confirm byte-identical content through all four paths — d2b977b
+- [x] 2.5 Confirm one-skill discovery in GitHub Copilot, Codex, and Claude — d2b977b
+- [x] 2.6 Confirm edits through an alias affect only the canonical file — d2b977b
+- [x] 2.7 Confirm README preserves the production-after-onboarding boundary — d2b977b
 
 ### Phase 3: Behavioral Forward-Test and Production MCP Smoke Test
 
 #### Automated
 
-- [ ] 3.1 Focused skill, MCP, and query tests pass together
-- [ ] 3.2 Repository quality gates pass
-- [ ] 3.3 Required independent forward-test scenarios pass
-- [ ] 3.4 Verification record contains no credential-shaped data
+- [x] 3.1 Focused skill, MCP, and query tests pass together
+- [x] 3.2 Repository quality gates pass
+- [x] 3.3 Required independent forward-test scenarios pass
+- [x] 3.4 Verification record contains no credential-shaped data
 
 #### Manual
 
-- [ ] 3.5 Confirm service-by-service production MCP invocation
-- [ ] 3.6 Confirm tool calls expose only supported non-secret arguments
-- [ ] 3.7 Confirm complete source-backed result presentation
-- [ ] 3.8 Confirm zero-record behavior remains inconclusive
-- [ ] 3.9 Confirm safe failure handling without credential disclosure
-- [ ] 3.10 Confirm no verification artifact contains secrets
-- [ ] 3.11 Confirm unsupported and constrained decision policy
+- [x] 3.5 Confirm service-by-service production MCP invocation
+- [x] 3.6 Confirm tool calls expose only supported non-secret arguments
+- [x] 3.7 Confirm complete source-backed result presentation
+- [x] 3.8 Confirm zero-record behavior remains inconclusive
+- [x] 3.9 Confirm safe failure handling without credential disclosure
+- [x] 3.10 Confirm no verification artifact contains secrets
+- [x] 3.11 Confirm unsupported and constrained decision policy

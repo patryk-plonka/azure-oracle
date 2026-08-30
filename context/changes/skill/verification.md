@@ -14,6 +14,8 @@ judge behavior.
 | Canonical skill | `.agents/skills/azlimits/SKILL.md` (Phase 1, `cd529a6`) |
 | Client aliases | `.github`, `.codex`, `.claude` under `skills/azlimits` (Phase 2, `d2b977b`) |
 | Checkout | Windows 11, `core.symlinks=true`, real NTFS symlinks materialized |
+| Forward-test client / model | Claude Code general-purpose subagents on Claude Opus 5 (`claude-opus-5[1m]`), inherited from the driving session |
+| Smoke-test client / model | Codex, GPT-5.6 Sol |
 
 ## Cross-client discovery
 
@@ -70,10 +72,14 @@ documentation carried inside synthetic records.
 
 ## Production MCP smoke test
 
-Run by the human operator against a client with the AzLimits MCP server already configured
-and a token already held in their secret store. This session held the skill but no AzLimits
-MCP tool, so none of the rows below were or could be satisfied from automated evidence. No
-token was created, revealed, or changed.
+Run by the human operator in **Codex on GPT-5.6 Sol**, against a client with the AzLimits MCP
+server already configured and a token already held in their secret store. This session held
+the skill but no AzLimits MCP tool, so none of the rows below were or could be satisfied from
+automated evidence. No token was created, revealed, or changed.
+
+Note that the smoke test therefore exercised the skill on a different model family than the
+forward tests, which ran on Claude Opus 5 — useful cross-model evidence that the instructions
+are not tuned to one model's habits.
 
 | Check | Result |
 | --- | --- |
